@@ -143,7 +143,7 @@ if __name__ == '__main__':
     parser = ArgumentParser("")
 
     parser.add_argument("--debug", "-d", action="store_true", default=False)
-    parser.add_argument("--dir_root", type=str, default="/home/gishin/Projects/DeepLearning/Oxford/open_set")
+    parser.add_argument("--dir_root", type=str, default="..")
     parser.add_argument("--seed", "-s", type=int, default=0)
     parser.add_argument("--model_name", type=str, default="gcpl_seg", choices=["gcpl_seg", "mp_seg"])
     parser.add_argument("--n_pixels_per_img", type=int, default=0)
@@ -167,7 +167,7 @@ if __name__ == '__main__':
     parser.add_argument("--w_repl", type=float, default=1, help="weight for repulsive loss")
 
     parser.add_argument("--non_isotropic", action="store_true", default=False)
-
+    parser.add_argument("--n_emb_dims", type=int, default=16)
     # encoder
     parser.add_argument("--weight_type", type=str, default="supervised", choices=["random", "supervised", "moco_v2", "swav", "deepcluster_v2"])
     parser.add_argument("--use_dilated_resnet", type=bool, default=True, help="whether to use dilated resnet")
@@ -175,13 +175,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.dataset_name == "cv":
-        args.batch_size = 3
+        args.batch_size = 5
         args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/camvid"
         args.ignore_index = 11
         args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
         args.std = [0.27413549931506, 0.28506257482912, 0.28284674400252]
         args.n_classes = 11
-        args.n_emb_dims = 16
+        args.n_emb_dims = args.n_emb_dims
         args.n_epochs = 50
 
         args.optimizer_type = "Adam"

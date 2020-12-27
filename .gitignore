@@ -1,2 +1,5 @@
+*.pyc
+segmentation/logs
+segmentation/scripts
 segmentation/networks/backbones/pretrained/*
 checkpoints
