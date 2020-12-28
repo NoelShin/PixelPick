@@ -5,9 +5,9 @@ from tqdm import tqdm
 
 from datasets.camvid import CamVidDataset
 from criterions.dop import Criterion
-# from utils.metrics import compute_acc
 from utils.metrics import prediction, eval_metrics
 from utils.utils import AverageMeter, EmbeddingVisualiser, write_log
+
 
 class Validator:
     def __init__(self, args):
@@ -46,7 +46,9 @@ class Validator:
                 if self.use_softmax:
                     pred = dict_outputs['pred'].argmax(dim=1)
                 else:
-                    pred = prediction(dict_outputs['emb'], prototypes, non_isotropic=self.non_isotropic)
+                    emb = dict_outputs['emb']
+                    pred = prediction(emb, prototypes, non_isotropic=self.non_isotropic)
+
                 correct, labeled, inter, union = eval_metrics(pred, y, self.n_classes, self.ignore_index)
 
                 total_inter, total_union = total_inter + inter, total_union + union

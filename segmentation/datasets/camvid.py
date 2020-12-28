@@ -70,7 +70,7 @@ class CamVidDataset(Dataset):
                 list_masks.append(mask)
 
             arr_masks = np.array(list_masks, dtype=np.bool)
-            np.save(path_labels, arr_masks)
+            # np.save(path_labels, arr_masks)
             print("# labelled pixels used for training:", arr_masks.astype(np.int32).sum())
             self.arr_masks = arr_masks
 

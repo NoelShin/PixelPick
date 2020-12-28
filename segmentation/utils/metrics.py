@@ -2,18 +2,24 @@ import numpy as np
 import torch
 
 def prediction(emb, prototypes, non_isotropic=False):
-    # emb: b x n_emb_dims x h x w, prototypes: n_classes x n_emb_dims
+    # emb: b x n_emb_dims x h x w
+    # prototypes: n_classes x n_emb_dims
     b, n_emb_dims, h, w = emb.shape
 
     if non_isotropic:
+        # emb = emb.transpose(1, 0).contiguous().view(n_emb_dims, b * h * w)  # n_emb_dims x (b x h x w)
+        # emb = emb / torch.linalg.norm(emb, ord=2, dim=1, keepdim=True)
+        # prototypes = prototypes / torch.linalg.norm(prototypes, ord=2, dim=1, keepdim=True)
+        # dist = torch.matmul(prototypes, emb).contiguous().view(n_classes, b, h, w).transpose(1, 0)  # b x n_classes x h x w
+        # return dist.argmax(dim=1)
+
         n_classes = prototypes.shape[0]
         emb = emb.unsqueeze(dim=1).repeat((1, n_classes, 1, 1, 1))  # b x n_classes x n_emb_dims x h x w
         prototypes = prototypes.view((1, n_classes, n_emb_dims, 1, 1)).repeat((b, 1, 1, h, w))  # b x n_classes x n_emb_dims x h x w
 
-        dist = (emb - prototypes).abs()
-        confidence = torch.exp(-dist)
-        confidence_per_class = confidence.mean(dim=2)  # b x n_classes x h x w
-        return confidence_per_class.argmax(dim=1)  # b x h x w
+        dist = (emb - prototypes) ** 2  # .abs()
+
+        return dist.sum(dim=2).argmin(dim=1)
 
     else:
         emb_sq = emb.pow(exponent=2).sum(dim=1, keepdim=True)  # b x 1 x h x w

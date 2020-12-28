@@ -1,2 +1,4 @@
+*.pyc
 segmentation/networks/backbones/pretrained/*
+analysis
 checkpoints

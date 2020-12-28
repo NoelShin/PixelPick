@@ -68,7 +68,7 @@ def main(args):
                 pred = pred.argmax(dim=1)  # for computing mIoU, pixel acc.
 
             else:
-                emb = dict_outputs['emb']  # b x c x h x w
+                emb = dict_outputs['emb']  # b x n_emb_dims x h x w
 
                 b, c, h, w = emb.shape
                 emb_flatten = emb.transpose(1, 0)  # c x b x h x w
@@ -84,7 +84,8 @@ def main(args):
                     dict_label_emb.update({label: emb_label})
 
                     if args.model_name == "mp_seg":
-                        emb_label = emb_label.mean(dim=0)
+                        if len(emb_label) > 1:
+                            emb_label = emb_label.mean(dim=0)
                         prototypes[label] = prototypes_updater.update_average(old=prototypes[label],
                                                                               new=emb_label.detach())
 
@@ -134,7 +135,7 @@ def main(args):
             break
 
     zip_file = zip_dir(args.dir_checkpoints)
-    send_file(zip_file)
+    # send_file(zip_file)
 
 
 if __name__ == '__main__':
@@ -143,7 +144,7 @@ if __name__ == '__main__':
     parser = ArgumentParser("")
 
     parser.add_argument("--debug", "-d", action="store_true", default=False)
-    parser.add_argument("--dir_root", type=str, default="/home/gishin/Projects/DeepLearning/Oxford/open_set")
+    parser.add_argument("--dir_root", type=str, default="/home/gishin-temp/projects/open_set")
     parser.add_argument("--seed", "-s", type=int, default=0)
     parser.add_argument("--model_name", type=str, default="gcpl_seg", choices=["gcpl_seg", "mp_seg"])
     parser.add_argument("--n_pixels_per_img", type=int, default=0)
@@ -160,14 +161,15 @@ if __name__ == '__main__':
 
     # gcpl
     parser.add_argument("--loss_type", type=str, default="dce", choices=["dce"])
-
     parser.add_argument("--use_pl", action="store_true", default=False, help="prototype loss")
     parser.add_argument("--w_pl", type=float, default=0.001, help="weight for prototype loss")
     parser.add_argument("--use_repl", action="store_true", default=False, help="repulsive loss")
     parser.add_argument("--w_repl", type=float, default=1, help="weight for repulsive loss")
+    parser.add_argument("--use_vl", action="store_true", default=False, help="prototype loss")
+    parser.add_argument("--w_vl", type=float, default=1, help="weight for prototype loss")
 
     parser.add_argument("--non_isotropic", action="store_true", default=False)
-
+    parser.add_argument("--n_emb_dims", type=int, default=32)
     # encoder
     parser.add_argument("--weight_type", type=str, default="supervised", choices=["random", "supervised", "moco_v2", "swav", "deepcluster_v2"])
     parser.add_argument("--use_dilated_resnet", type=bool, default=True, help="whether to use dilated resnet")
@@ -175,13 +177,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.dataset_name == "cv":
-        args.batch_size = 3
+        args.batch_size = 5
         args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/camvid"
         args.ignore_index = 11
         args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
         args.std = [0.27413549931506, 0.28506257482912, 0.28284674400252]
         args.n_classes = 11
-        args.n_emb_dims = 16
+        args.n_emb_dims = args.n_emb_dims
         args.n_epochs = 50
 
         args.optimizer_type = "Adam"
@@ -217,9 +219,14 @@ if __name__ == '__main__':
     elif args.model_name == "gcpl_seg":
         list_keywords.append("gcpl_seg")
         list_keywords.append(f"n_emb_dims_{args.n_emb_dims}")
+
         if args.use_pl:
             list_keywords.append("pl")
             list_keywords.append(str(args.w_pl))
+
+        if args.use_vl:
+            list_keywords.append("vl")
+            list_keywords.append(str(args.w_vl))
 
     elif args.model_name == "mp_seg":
         list_keywords.append("mp_seg")
