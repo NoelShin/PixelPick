@@ -144,7 +144,7 @@ if __name__ == '__main__':
     parser = ArgumentParser("")
 
     parser.add_argument("--debug", "-d", action="store_true", default=False)
-    parser.add_argument("--dir_root", type=str, default="/home/gishin-temp/projects/open_set")
+    parser.add_argument("--dir_root", type=str, default="..")
     parser.add_argument("--seed", "-s", type=int, default=0)
     parser.add_argument("--model_name", type=str, default="gcpl_seg", choices=["gcpl_seg", "mp_seg"])
     parser.add_argument("--n_pixels_per_img", type=int, default=0)
