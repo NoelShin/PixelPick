@@ -11,7 +11,7 @@ from networks.model import FPNSeg
 from networks.modules import init_prototypes, init_radii, EMA
 from utils.metrics import prediction, eval_metrics
 from utils.utils import get_criterion, get_optimizer, get_lr_scheduler, get_validator, AverageMeter, EmbeddingVisualiser
-from utils.utils import write_log, send_file, zip_dir
+from utils.utils import write_log, send_file, Visualiser, zip_dir
 
 
 def main(args):
@@ -30,18 +30,34 @@ def main(args):
 
     model = FPNSeg(args).to(device)
     print("\nExperim name:", args.experim_name + '\n')
-    prototypes = init_prototypes(args.n_classes, args.n_emb_dims, learnable=args.model_name == "gcpl_seg", device=device)
+    prototypes = init_prototypes(args.n_classes,
+                                 args.n_emb_dims,
+                                 args.n_prototypes,
+                                 learnable=args.model_name == "gcpl_seg",
+                                 device=device)
 
     if args.model_name == "mp_seg":
         prototypes_updater = EMA(args.momentum_prototypes)
 
-    list_params = list(model.parameters())
-    list_params += [prototypes] if args.model_name == "gcpl_seg" else []
+    optimizer_params = args.optimizer_params
+    list_params = [{'params': model.encoder.parameters(),
+                    'lr': optimizer_params['lr'] / 10,
+                    'weight_decay': optimizer_params['weight_decay']}]
 
-    criterion = get_criterion(args)
+    list_params += [{'params': model.decoder.parameters(),
+                     'lr': optimizer_params['lr'],  # ,
+                     'weight_decay': optimizer_params['weight_decay']}]
+
+    list_params += [{'params': prototypes,
+                     'lr': 0.1,
+                     'betas': (0.9, 0.999),
+                     'weight_decay': optimizer_params['weight_decay']}] if args.model_name == "gcpl_seg" else []
+
+    criterion = get_criterion(args, device)
     optimizer = get_optimizer(args, params=list_params)
     lr_scheduler = get_lr_scheduler(args, optimizer=optimizer)
     validator = get_validator(args)
+    vis = Visualiser(args.dataset_name)
 
     running_loss, running_miou, running_pixel_acc = AverageMeter(), AverageMeter(), AverageMeter()
 
@@ -50,6 +66,10 @@ def main(args):
 
         dataloader_iter = iter(dataloader)
         tbar = tqdm(range(len(dataloader)))
+
+        if args.active_learning:
+            dict_img_uncertain_pix = dict()
+
         for batch_ind in tbar:
             total_inter, total_union = 0, 0
             total_correct, total_label = 0, 0
@@ -63,9 +83,9 @@ def main(args):
             dict_outputs = model(x)
 
             if args.use_softmax:
-                pred = dict_outputs["pred"]
-                dict_losses = {"ce": F.cross_entropy(pred, y, ignore_index=args.ignore_index)}
-                pred = pred.argmax(dim=1)  # for computing mIoU, pixel acc.
+                confidence = dict_outputs["pred"]
+                dict_losses = {"ce": F.cross_entropy(confidence, y, ignore_index=args.ignore_index)}
+                pred = confidence.argmax(dim=1)  # for computing mIoU, pixel acc.
 
             else:
                 emb = dict_outputs['emb']  # b x n_emb_dims x h x w
@@ -90,8 +110,9 @@ def main(args):
                                                                               new=emb_label.detach())
 
                 dict_outputs.update({"dict_label_emb": dict_label_emb})
-                pred = prediction(emb.detach(), prototypes.detach(), non_isotropic=args.non_isotropic)
-                dict_losses = criterion(dict_outputs, prototypes, labels=y, non_isotropic=args.non_isotropic)
+                pred, confidence = prediction(emb.detach(), prototypes.detach(), return_confidence=True)
+                dict_losses = criterion(dict_outputs, prototypes, labels=y,
+                                        non_isotropic=args.non_isotropic)
 
             loss = torch.tensor(0, dtype=torch.float32).to(device)
 
@@ -119,6 +140,15 @@ def main(args):
             running_pixel_acc.update(pix_acc)
 
             tbar.set_description(fmt.format(e, running_miou.avg, running_pixel_acc.avg, running_loss.avg))
+
+            if args.active_learning:
+                for ind in dict_data["ind"]:
+                    list_uncertain_pix = confidence[ind].flatten().topk(k=args.n_pixels_per_add_labels, largest=False)[1]  # n_pixels x (h * w)
+                    dict_img_uncertain_pix.update({ind.item(): list_uncertain_pix})
+
+                if e % args.epoch_add_labels == 0 and e < args.n_add_labels:
+                    dataset.add_labels(dict_img_uncertain_pix)
+
             if args.debug:
                 break
 
@@ -129,13 +159,21 @@ def main(args):
         running_loss.reset()
         running_miou.reset()
 
+        dict_tensors = {'input': dict_data['x'][0].cpu(),
+                        'target': dict_data['y'][0].cpu(),
+                        'pred': pred[0].detach().cpu(),
+                        'confidence': -confidence[0].detach().cpu().max(dim=0)[0]}
+        # minus sign is to draw uncertain part bright
+
+        vis(dict_tensors, fp=f"{args.dir_checkpoints}/train/{e}.png")
+
         validator(model, prototypes, e)
 
         if args.debug:
             break
 
     zip_file = zip_dir(args.dir_checkpoints)
-    # send_file(zip_file)
+    send_file(zip_file)
 
 
 if __name__ == '__main__':
@@ -150,6 +188,14 @@ if __name__ == '__main__':
     parser.add_argument("--n_pixels_per_img", type=int, default=0)
     parser.add_argument("--use_aug", action='store_true', default=False)
     parser.add_argument("--use_softmax", action='store_true', default=False)
+    parser.add_argument("--suffix", type=str, default='')
+
+    # active learning
+    parser.add_argument("--active_learning", action="store_true", default=False)
+    parser.add_argument("--epoch_add_labels", type=int, default=5)
+    parser.add_argument("--n_add_labels", type=int, default=5)
+    parser.add_argument("--n_pixels_per_add_labels", type=int, default=1)
+
 
     # system
     parser.add_argument("--gpu_ids", type=str, nargs='+', default='0')
@@ -160,9 +206,10 @@ if __name__ == '__main__':
     parser.add_argument("--dir_datasets", type=str, default="/scratch/shared/beegfs/gyungin/datasets")
 
     # gcpl
+    parser.add_argument("--n_prototypes", type=int, default=10)
     parser.add_argument("--loss_type", type=str, default="dce", choices=["dce"])
     parser.add_argument("--use_pl", action="store_true", default=False, help="prototype loss")
-    parser.add_argument("--w_pl", type=float, default=0.001, help="weight for prototype loss")
+    parser.add_argument("--w_pl", type=float, default=1, help="weight for prototype loss")
     parser.add_argument("--use_repl", action="store_true", default=False, help="repulsive loss")
     parser.add_argument("--w_repl", type=float, default=1, help="weight for repulsive loss")
     parser.add_argument("--use_vl", action="store_true", default=False, help="prototype loss")
@@ -170,8 +217,10 @@ if __name__ == '__main__':
 
     parser.add_argument("--non_isotropic", action="store_true", default=False)
     parser.add_argument("--n_emb_dims", type=int, default=32)
+
     # encoder
-    parser.add_argument("--weight_type", type=str, default="supervised", choices=["random", "supervised", "moco_v2", "swav", "deepcluster_v2"])
+    parser.add_argument("--weight_type", type=str, default="supervised",
+                        choices=["random", "supervised", "moco_v2", "swav", "deepcluster_v2"])
     parser.add_argument("--use_dilated_resnet", type=bool, default=True, help="whether to use dilated resnet")
 
     args = parser.parse_args()
@@ -183,12 +232,11 @@ if __name__ == '__main__':
         args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
         args.std = [0.27413549931506, 0.28506257482912, 0.28284674400252]
         args.n_classes = 11
-        args.n_emb_dims = args.n_emb_dims
         args.n_epochs = 50
 
         args.optimizer_type = "Adam"
         args.optimizer_params = {
-            "lr": 5e-4,  # 1e-3,
+            "lr": 5e-4,
             "betas": (0.9, 0.999),
             "weight_decay": 2e-4,
             "eps": 1e-7
@@ -218,11 +266,16 @@ if __name__ == '__main__':
 
     elif args.model_name == "gcpl_seg":
         list_keywords.append("gcpl_seg")
+        list_keywords.append(f"k_{args.n_prototypes}")
         list_keywords.append(f"n_emb_dims_{args.n_emb_dims}")
 
         if args.use_pl:
             list_keywords.append("pl")
             list_keywords.append(str(args.w_pl))
+
+        if args.use_repl:
+            list_keywords.append("repl")
+            list_keywords.append(str(args.w_repl))
 
         if args.use_vl:
             list_keywords.append("vl")
@@ -245,6 +298,7 @@ if __name__ == '__main__':
 
     list_keywords.append(f"n_pixels_{args.n_pixels_per_img}")
     list_keywords.append(str(args.seed))
+    list_keywords.append(args.suffix)
     list_keywords.append("debug") if args.debug else None
     args.experim_name = '_'.join(list_keywords)
 

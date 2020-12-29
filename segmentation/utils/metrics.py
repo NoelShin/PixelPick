@@ -1,19 +1,14 @@
 import numpy as np
 import torch
 
-def prediction(emb, prototypes, non_isotropic=False):
+
+def prediction(emb, prototypes, non_isotropic=False, return_confidence=False):
     # emb: b x n_emb_dims x h x w
     # prototypes: n_classes x n_emb_dims
     b, n_emb_dims, h, w = emb.shape
+    n_classes = prototypes.shape[0]
 
     if non_isotropic:
-        # emb = emb.transpose(1, 0).contiguous().view(n_emb_dims, b * h * w)  # n_emb_dims x (b x h x w)
-        # emb = emb / torch.linalg.norm(emb, ord=2, dim=1, keepdim=True)
-        # prototypes = prototypes / torch.linalg.norm(prototypes, ord=2, dim=1, keepdim=True)
-        # dist = torch.matmul(prototypes, emb).contiguous().view(n_classes, b, h, w).transpose(1, 0)  # b x n_classes x h x w
-        # return dist.argmax(dim=1)
-
-        n_classes = prototypes.shape[0]
         emb = emb.unsqueeze(dim=1).repeat((1, n_classes, 1, 1, 1))  # b x n_classes x n_emb_dims x h x w
         prototypes = prototypes.view((1, n_classes, n_emb_dims, 1, 1)).repeat((b, 1, 1, h, w))  # b x n_classes x n_emb_dims x h x w
 
@@ -22,16 +17,25 @@ def prediction(emb, prototypes, non_isotropic=False):
         return dist.sum(dim=2).argmin(dim=1)
 
     else:
+        n_prototypes = prototypes.shape[1]
         emb_sq = emb.pow(exponent=2).sum(dim=1, keepdim=True)  # b x 1 x h x w
         emb_sq = emb_sq.transpose(1, 0).contiguous().view(1, -1).transpose(1, 0)  # (b x h x w) x 1
 
+        prototypes_sq = prototypes.pow(exponent=2).sum(dim=2, keepdim=True)  # n_classes x n_prototypes x 1
+        prototypes_sq = prototypes_sq.view(n_classes * n_prototypes, 1)  # (n_classes * n_prototypes) x 1
+
         emb = emb.transpose(1, 0).contiguous().view(n_emb_dims, -1).transpose(1, 0)  # (b * h * w) x n_emb_dims
+        prototypes = prototypes.view(n_classes * n_prototypes, n_emb_dims)  # (n_classes * n_prototypes) x n_emb_dims
 
-        prototypes_sq = prototypes.pow(exponent=2).sum(dim=1, keepdim=True)  # n_classes x 1
-
-        dist = emb_sq - 2 * torch.matmul(emb, prototypes.t()) + prototypes_sq.t()  # (b x h x w) x n_classes
+        # emb: (b * h * w) x n_emb_dims, prototypes.t(): n_emb_dims x (n_classes x n_prototypes)
+        dist = emb_sq - 2 * torch.matmul(emb, prototypes.t()) + prototypes_sq.t()  # (b x h x w) x (n_classes * n_prototypes)
+        dist = dist.view(b * h * w, n_classes, n_prototypes).sum(dim=-1)  # (b x h x w) x n_classes
         dist = dist.transpose(1, 0).view(-1, b, h, w).transpose(1, 0)  # b x n_classes h x w
-        return dist.argmin(dim=1)
+
+        if return_confidence:
+            return dist.argmin(dim=1), -dist
+        else:
+            return dist.argmin(dim=1)
 
 
 class AverageMeter(object):

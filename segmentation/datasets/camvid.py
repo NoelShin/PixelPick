@@ -12,11 +12,13 @@ from torchvision.transforms import ColorJitter, RandomApply, RandomGrayscale
 import torchvision.transforms.functional as TF
 from tqdm import tqdm
 
+
 class CamVidDataset(Dataset):
     def __init__(self, args, val=False):
         super(CamVidDataset, self).__init__()
         self.args = args
         assert os.path.isdir(args.dir_dataset), f"{args.dir_dataset} does not exist."
+        self.active_learning = args.active_learning
         self.seed = args.seed
 
         mode = "test" if val else "train"
@@ -31,7 +33,6 @@ class CamVidDataset(Dataset):
         if self.geometric_augmentations["random_scale"]:
             self.batch_size = args.batch_size
             self.n_samples = 0
-            self.resample_random_scale()
 
         if self.geometric_augmentations["crop"]:
             self.mean = tuple((np.array(args.mean) * 255.0).astype(np.uint8).tolist())
@@ -41,6 +42,7 @@ class CamVidDataset(Dataset):
         self.pad_size = (0, 0)
 
         self.arr_masks = None
+        self.dict_label_counts = None
 
         if args.n_pixels_per_img != 0 and not val:
             dir_labels = f"{args.dir_dataset}/n_pixels_labels"
@@ -70,22 +72,25 @@ class CamVidDataset(Dataset):
                 list_masks.append(mask)
 
             arr_masks = np.array(list_masks, dtype=np.bool)
-            # np.save(path_labels, arr_masks)
+
             print("# labelled pixels used for training:", arr_masks.astype(np.int32).sum())
             self.arr_masks = arr_masks
 
         self.val = val
 
-    def resample_random_scale(self):
-        self.random_scale = uniform(0.5, 2.0)
-        return self.random_scale
+    def _add_labels(self, dict_img_uncertain_pix):
+        assert len(dict_img_uncertain_pix) == len(self.list_labels)
+        previous = self.arr_masks.sum()
+        for img_ind, list_uncertain_pix in dict_img_uncertain_pix.items():
+            for uncertain_pix in list_uncertain_pix:
+                self.arr_masks[img_ind[uncertain_pix]] = True
+        print("# labelled pixels is changed from {} to {}".format(previous, self.arr_masks.sum()))
 
     def _geometric_augmentations(self, x, y, edge=None):
         if self.geometric_augmentations["random_scale"]:
             w, h = x.size
-            rs = self.resample_random_scale()
+            rs = uniform(0.5, 2.0)
             w_resized, h_resized = int(w * rs), int(h * rs)
-            # w_resized, h_resized = int(w * self.random_scale), int(h * self.random_scale)
 
             x = TF.resize(x, (h_resized, w_resized), Image.BILINEAR)
             y = TF.resize(y, (h_resized, w_resized), Image.NEAREST)
@@ -164,6 +169,8 @@ class CamVidDataset(Dataset):
             dict_data.update({'mask': mask})
 
         dict_data.update({'x': TF.to_tensor(x), 'y': torch.tensor(np.asarray(y, np.int64), dtype=torch.long)})
+        if self.active_learning:
+            dict_data.update({'ind': ind})
         return dict_data
 
 

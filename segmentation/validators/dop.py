@@ -6,7 +6,7 @@ from tqdm import tqdm
 from datasets.camvid import CamVidDataset
 from criterions.dop import Criterion
 from utils.metrics import prediction, eval_metrics
-from utils.utils import AverageMeter, EmbeddingVisualiser, write_log
+from utils.utils import AverageMeter, EmbeddingVisualiser, write_log, Visualiser
 
 
 class Validator:
@@ -25,8 +25,9 @@ class Validator:
         self.n_classes = args.n_classes
         self.non_isotropic = args.non_isotropic
         self.use_softmax = args.use_softmax
+        self.vis = Visualiser(self.dataset_name)
 
-    def __call__(self, model, prototypes, epoch):
+    def __call__(self, model, prototypes, epoch, dict_label_counts=None):
         model.eval()
 
         running_miou = AverageMeter()
@@ -44,10 +45,12 @@ class Validator:
                 dict_outputs = model(x)
 
                 if self.use_softmax:
-                    pred = dict_outputs['pred'].argmax(dim=1)
+                    confidence = dict_outputs['pred']
+                    pred = confidence.argmax(dim=1)
                 else:
                     emb = dict_outputs['emb']
-                    pred = prediction(emb, prototypes, non_isotropic=self.non_isotropic)
+                    pred, confidence = prediction(emb, prototypes, non_isotropic=self.non_isotropic,
+                                                  return_confidence=True)
 
                 correct, labeled, inter, union = eval_metrics(pred, y, self.n_classes, self.ignore_index)
 
@@ -67,4 +70,11 @@ class Validator:
         print("Experim name:", self.experim_name)
         print("Epoch {:d} | miou: {:.3f} | pixel_acc.: {:.3f}".format(epoch, running_miou.avg, running_pixel_acc.avg))
         print('=' * 100 + '\n')
+
         write_log(self.log_val, list_entities=[epoch, running_miou.avg, running_pixel_acc.avg])
+        dict_tensors = {'input': dict_data['x'][0].cpu(),
+                        'target': dict_data['y'][0].cpu(),
+                        'pred': pred[0].detach().cpu(),
+                        'confidence': -confidence[0].detach().cpu().max(dim=0)[0]}  # minus sign is to draw uncertain part bright
+
+        self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{epoch}.png")

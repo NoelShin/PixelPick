@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+
 class FPNDecoder(nn.Module):
     def __init__(self, args):
         super(FPNDecoder, self).__init__()
@@ -77,6 +78,22 @@ class FPNDecoder(nn.Module):
     def _init(m):
         if isinstance(m, nn.Conv2d):
            torch.nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+
+        # if isinstance(m, nn.Conv2d):
+        #     kernel_size = torch.tensor(m.weight.shape)
+        #     scale = torch.sqrt(6. / (torch.prod(kernel_size[1:]) + torch.prod(kernel_size[2:]) * kernel_size[-1]))
+        #     torch.nn.init.uniform_(m.weight, -scale, scale)
+        #     nn.init.constant_(m.bias, 0)
+        #
+        # elif isinstance(m, nn.Linear):
+        #     kernel_size = torch.tensor(m.weight.shape)
+        #     scale = torch.sqrt(6. / (kernel_size.sum()))
+        #     torch.nn.init.uniform_(m.weight, -scale, scale)
+        #     nn.init.constant_(m.bias, 0)
+        #
+        # elif isinstance(m, nn.BatchNorm2d):
+        #     nn.init.constant_(m.weight, 1)
+        #     nn.init.constant_(m.bias, 0)
 
 
 class UpsampleBlock(nn.Module):

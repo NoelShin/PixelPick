@@ -95,7 +95,6 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-
     def __init__(self, block, layers, num_classes=1000, deep_base=False, norm_type=None):
         super(ResNet, self).__init__()
         self.inplanes = 128 if deep_base else 64

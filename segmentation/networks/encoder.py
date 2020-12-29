@@ -1,9 +1,5 @@
-from networks.backbones.resnet_backbone import ResNetBackbone
-# from utils.helpers import initialize_weights, getModel
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import os
+from networks.backbones.resnet_backbone import ResNetBackbone
 
 resnet50 = {
     "supervised": "../networks/backbones/pretrained/resnet50-pytorch.pth",
@@ -22,17 +18,6 @@ class Encoder(nn.Module):
 
         if weight_type == "supervised":
             self.base = ResNetBackbone(backbone='resnet50_dilated8', pretrained=resnet50[weight_type])
-
-        # elif weight_type == "self-supervised":
-        #     assert os.path.isfile(resnet50[pretrained_model]), f"Pretrained weights of {pretrained_model} is not found."
-        #     self.model = getModel(k=58,
-        #                           listLayers=None,
-        #                           stateDict=None,
-        #                           sizeSeg=7,  # Noel - This should be 7.
-        #                           loadStatedict=True,
-        #                           pathModelWeights=resnet50[pretrained_model],
-        #                           pretrained_model=pretrained_model,
-        #                           dilate_scale=8)
 
         else:
             if use_dilated_resnet:

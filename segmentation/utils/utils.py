@@ -1,8 +1,12 @@
 import os
 from shutil import make_archive, rmtree
+from time import sleep
+
 import numpy as np
 import torch
+from PIL import Image
 import matplotlib.pyplot as plt
+
 
 def send_file(fp, remove_file=False):
     try:
@@ -12,6 +16,7 @@ def send_file(fp, remove_file=False):
     except:
         pass
     return
+
 
 def zip_dir(d, fp=None, fmt='zip', remove_dir=False):
     assert os.path.isdir(d), f"{d} does not exist."
@@ -24,6 +29,7 @@ def zip_dir(d, fp=None, fmt='zip', remove_dir=False):
         rmtree(d)
     return f"{fp}.{fmt}"
 
+
 def write_log(fp, list_entities=None, header=None):
     if list_entities is not None:
         list_entities = [str(e) for e in list_entities]
@@ -33,24 +39,27 @@ def write_log(fp, list_entities=None, header=None):
     f.close()
 
 
-def get_criterion(args):
+def get_criterion(args, device):
     from criterions.dop import Criterion
-    return Criterion(args)
+    return Criterion(args, device)
+
 
 def get_optimizer(args, params):
     if args.optimizer_type == "Adam":
         from torch.optim import Adam
-        optimizer = Adam(params, **args.optimizer_params)
+        optimizer = Adam(params)
     else:
         raise ValueError(f"Invalid optimizer_type {args.optimizer_type}. Choices: ['Adam']")
 
     return optimizer
+
 
 def get_lr_scheduler(args, optimizer):
     if args.dataset_name == "cv":
         lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 40], gamma=0.1)
 
     return lr_scheduler
+
 
 def get_validator(args):
     from validators.dop import Validator
@@ -99,6 +108,7 @@ class AverageMeter(object):
     @property
     def average(self):
         return np.round(self.avg, 5)
+
 
 class EmbeddingVisualiser:
     def __init__(self, n_classes, unseen_class=-1):
@@ -188,3 +198,126 @@ class EmbeddingVisualiser:
     def reset(self):
         self.dict_label_emb = {i: list() for i in range(self.n_classes)}
 
+
+class Visualiser:
+    def __init__(self, dataset_name):
+        if dataset_name == "cv":
+            self.palette = {
+                0: (128, 128, 128),
+                1: (128, 0, 0),
+                2: (192, 192, 128),
+                3: (128, 64, 128),
+                4: (0, 0, 192),
+                5: (128, 128, 0),
+                6: (192, 128, 128),
+                7: (64, 64, 128),
+                8: (64, 0, 128),
+                9: (64, 64, 0),
+                10: (0, 128, 192),
+                11: (0, 0, 0)
+            }
+
+        elif dataset_name == "cs":
+            self.palette = {
+                0: (128, 64, 128),
+                1: (244, 35, 232),
+                2: (70, 70, 70),
+                3: (102, 102, 156),
+                4: (190, 153, 153),
+                5: (153, 153, 153),
+                6: (250, 170, 30),
+                7: (220, 220, 0),
+                8: (107, 142, 35),
+                9: (152, 251, 152),
+                10: (70, 130, 180),
+                11: (220, 20, 60),
+                12: (255, 0, 0),
+                13: (0, 0, 142),
+                14: (0, 0, 70),
+                15: (0, 60, 100),
+                16: (0, 80, 100),
+                17: (0, 0, 230),
+                18: (119, 11, 32),
+                19: (0, 0, 0)
+            }
+
+        elif dataset_name == "voc":
+            self.palette = {
+                0: [0, 0, 0],
+                1: [128, 0, 0],
+                2: [0, 128, 0],
+                3: [128, 128, 0],
+                4: [0, 0, 128],
+                5: [128, 0, 128],
+                6: [0, 128, 128],
+                7: [128, 128, 128],
+                8: [64, 0, 0],
+                9: [192, 0, 0],
+                10: [64, 128, 0],
+                11: [192, 128, 0],
+                12: [64, 0, 128],
+                13: [192, 0, 128],
+                14: [64, 128, 128],
+                15: [192, 128, 128],
+                16: [0, 64, 0],
+                17: [128, 64, 0],
+                18: [0, 192, 0],
+                19: [128, 192, 0],
+                20: [0, 64, 128],
+                255: [255, 255, 255]
+            }
+
+    def _preprocess(self, tensor, seg, downsample=2):
+        if len(tensor.shape) == 2:
+            h, w = tensor.shape
+        else:
+            c, h, w = tensor.shape
+
+        if seg:
+            tensor_flatten = tensor.flatten()
+            grid = torch.zeros([h * w, 3], dtype=torch.uint8)
+            for i in range(len(tensor_flatten)):
+                grid[i] = torch.tensor(self.palette[tensor_flatten[i].item()], dtype=torch.uint8)
+            tensor = grid.view(h, w, 3)
+
+        else:
+            tensor -= tensor.min()
+            tensor = tensor / (tensor.max() + 1e-7)
+            tensor *= 255
+
+            if len(tensor.shape) == 3:
+                tensor = tensor.permute(1, 2, 0)
+
+        arr = np.clip(tensor.numpy(), 0, 255).astype(np.uint8)
+        return Image.fromarray(arr).resize((w // downsample, h // downsample))
+
+    def _make_grid(self, list_imgs):
+        width = 0
+        height = list_imgs[0].height
+        for img in list_imgs:
+            width += img.width
+
+        grid = Image.new("RGB", (width, height))
+        x_offset = 0
+        for img in list_imgs:
+            grid.paste(img, (x_offset, 0))
+            x_offset += img.width
+        return grid
+
+    def __call__(self, dict_tensors, fp='', show=False):
+        list_imgs = list()
+        for name, tensor in dict_tensors.items():
+            list_imgs.append(self._preprocess(tensor, seg=name in ['target', 'pred']))
+
+        from torchvision.utils import make_grid
+        img = self._make_grid(list_imgs)
+        #make_grid(list_imgs, nrow=len(list_imgs))
+
+        if fp:
+            img.save(fp)
+
+        if show:
+            img.show()
+            sleep(60)
+
+        return
