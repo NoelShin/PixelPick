@@ -44,19 +44,57 @@ def get_criterion(args, device):
     return Criterion(args, device)
 
 
-def get_optimizer(args, params):
-    if args.optimizer_type == "Adam":
+def get_optimizer(args, model, prototypes=None):
+    optimizer_params = args.optimizer_params
+    if args.dataset_name == "cv":
         from torch.optim import Adam
-        optimizer = Adam(params)
+        list_params = [{'params': model.encoder.parameters(),
+                        'lr': optimizer_params['lr'] / 10,
+                        'weight_decay': optimizer_params['weight_decay']}]
+
+        list_params += [{'params': model.decoder.parameters(),
+                         'lr': optimizer_params['lr'],
+                         'weight_decay': optimizer_params['weight_decay']}]
+
+        if prototypes is not None:
+            list_params += [{'params': prototypes,
+                             'lr': 0.1,
+                             'betas': (0.9, 0.999),
+                             'weight_decay': optimizer_params['weight_decay']}] if args.model_name == "gcpl_seg" else []
+        optimizer = Adam(list_params)
+
+    elif args.dataset_name == "voc":
+        from torch.optim import SGD
+        list_params = [{'params': model.encoder.parameters(),
+                        'lr': optimizer_params['lr'] / 10,
+                        'weight_decay': optimizer_params['weight_decay'],
+                        'momentum': optimizer_params['momentum']}]
+
+        list_params += [{'params': model.decoder.parameters(),
+                         'lr': optimizer_params['lr'],
+                         'weight_decay': optimizer_params['weight_decay'],
+                         'momentum': optimizer_params['momentum']}]
+
+        if prototypes is not None:
+            list_params += [{'params': prototypes,
+                             'lr': 1.,
+                             'weight_decay': optimizer_params['weight_decay'],
+                             'momentum': optimizer_params['momentum']}] if args.model_name == "gcpl_seg" else []
+        optimizer = SGD(list_params)
+
     else:
         raise ValueError(f"Invalid optimizer_type {args.optimizer_type}. Choices: ['Adam']")
 
     return optimizer
 
 
-def get_lr_scheduler(args, optimizer):
+def get_lr_scheduler(args, optimizer, iters_per_epoch=-1):
     if args.dataset_name == "cv":
         lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 40], gamma=0.1)
+
+    elif args.dataset_name == "voc":
+        from utils.lr_scheduler import Poly
+        lr_scheduler = Poly(optimizer, args.n_epochs, iters_per_epoch)
 
     return lr_scheduler
 
@@ -270,8 +308,10 @@ class Visualiser:
     def _preprocess(self, tensor, seg, downsample=2):
         if len(tensor.shape) == 2:
             h, w = tensor.shape
-        else:
+        elif len(tensor.shape) == 3:
             c, h, w = tensor.shape
+        else:
+            raise ValueError(f"{tensor.shape}")
 
         if seg:
             tensor_flatten = tensor.flatten()
@@ -309,7 +349,6 @@ class Visualiser:
         for name, tensor in dict_tensors.items():
             list_imgs.append(self._preprocess(tensor, seg=name in ['target', 'pred']))
 
-        from torchvision.utils import make_grid
         img = self._make_grid(list_imgs)
         #make_grid(list_imgs, nrow=len(list_imgs))
 

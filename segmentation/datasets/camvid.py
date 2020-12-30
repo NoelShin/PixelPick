@@ -42,15 +42,9 @@ class CamVidDataset(Dataset):
         self.pad_size = (0, 0)
 
         self.arr_masks = None
-        self.dict_label_counts = None
 
         if args.n_pixels_per_img != 0 and not val:
-            dir_labels = f"{args.dir_dataset}/n_pixels_labels"
-
-            path_labels = f"{dir_labels}/arr_labels_{args.n_pixels_per_img}.npy"
-
             np.random.seed(self.seed)
-            os.makedirs(f"{dir_labels}", exist_ok=True)
 
             label = Image.open(self.list_labels[0]).convert("RGB")
 

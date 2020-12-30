@@ -47,29 +47,6 @@ class Criterion:
             dist = emb_sq - 2 * torch.matmul(emb, prototypes.t()) + prototypes_sq.t()  # (b x h x w) x (n_classes * n_prototypes)
             dist = dist.view(b * h * w, n_classes, n_prototypes).sum(dim=-1)  # (b x h x w) x n_classes
             dist = dist.transpose(1, 0).view(-1, b, h, w).transpose(1, 0)  # b x n_classes h x w
-
-        # else:
-        #     emb_sq = emb.pow(exponent=2).sum(dim=1, keepdim=True)  # b x 1 x h x w
-        #     emb_sq = emb_sq.transpose(1, 0).contiguous().view(1, -1).transpose(1, 0)  # (b x h x w) x 1
-        #
-        #     emb = emb.transpose(1, 0).contiguous().view(n_emb_dims, -1).transpose(1, 0)  # (b * h * w) x n_emb_dims
-        #
-        #     prototypes_sq = prototypes.pow(exponent=2).sum(dim=1, keepdim=True)  # n_classes x 1
-        #     # n_classes x n_prototypes x 1           n_emb_dims
-        #
-        #     # emb: (b * h * w) x n_emb_dims, prototypes.t(): n_emb_dims x (n_classes x n_prototypes)
-        #     dist = emb_sq - 2 * torch.matmul(emb, prototypes.t()) + prototypes_sq.t()  # (b x h x w) x n_classes
-        #
-        #     dist = dist.transpose(1, 0).view(-1, b, h, w).transpose(1, 0)  # b x n_classes h x w
-        #
-        #     if dict_label_counts is not None:
-        #         import numpy as np
-        #         # print([i[0] for i in dict_label_counts.values()])
-        #         mass = np.array([i[0] for i in dict_label_counts.values()])
-        #         mass = torch.log(torch.tensor(mass, dtype=torch.float32, device=torch.device("cuda:0")))
-        #         mass = mass.view(1, n_classes, 1, 1).repeat((b, 1, h, w))
-        #         dist /= mass
-
             return dist
 
     # distance-based cross-entropy loss
@@ -87,22 +64,9 @@ class Criterion:
             # prototype_label = prototypes[label].unsqueeze(dim=0).repeat((emb.shape[0], 1))
             prototype_label = prototypes[label]  # n_prototypes x n_emb_dims
             emb = emb.mean(dim=0).unsqueeze(0).repeat((prototype_label.shape[0], 1))  # n_prototypes x n_emb_dims
-
-            l, _ = F.mse_loss(emb, prototype_label, reduction='none').min(dim=0)
+            l, _ = F.mse_loss(emb, prototype_label, reduction='none').min(dim=0)  # n_emb_dims
             loss += l.mean()
         return loss
-
-    # @staticmethod
-    # def _pl(dict_label_emb, prototypes):
-    #     # emb: m x n_emb_dims, prototypes: n_classes x n_emb_dims, labels: b x h x w
-    #     loss = 0.
-    #     for label, emb in dict_label_emb.items():
-    #         # prototype_label = prototypes[label].unsqueeze(dim=0).repeat((emb.shape[0], 1))
-    #         prototype_label = prototypes[label]
-    #         emb = emb.mean(dim=0)
-    #
-    #         loss += F.mse_loss(emb, prototype_label)
-    #     return loss
 
     # variance loss
     def _vl(self, dict_label_emb):

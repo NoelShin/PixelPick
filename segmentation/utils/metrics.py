@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 
 def prediction(emb, prototypes, non_isotropic=False, return_confidence=False):
@@ -33,7 +34,7 @@ def prediction(emb, prototypes, non_isotropic=False, return_confidence=False):
         dist = dist.transpose(1, 0).view(-1, b, h, w).transpose(1, 0)  # b x n_classes h x w
 
         if return_confidence:
-            return dist.argmin(dim=1), -dist
+            return dist.argmin(dim=1), F.softmax(-dist, dim=1).max(dim=1)[0]
         else:
             return dist.argmin(dim=1)
 
