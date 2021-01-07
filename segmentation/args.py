@@ -21,7 +21,7 @@ class Arguments:
         parser.add_argument("--n_pixels_per_query", type=int, default=10, help="# pixels for labelling")
         parser.add_argument("--n_epochs_query", type=int, default=20, help="interval between queries in epoch")
         parser.add_argument("--max_budget", type=int, default=100, help="maximum budget in pixels per image")
-        parser.add_argument("--query_strategy", type=str, default="least_confidence", choices=["least_confidence", "margin_sampling", "entropy"])
+        parser.add_argument("--query_strategy", type=str, default="least_confidence", choices=["least_confidence", "margin_sampling", "entropy", "random"])
 
         # system
         parser.add_argument("--gpu_ids", type=str, nargs='+', default='0')

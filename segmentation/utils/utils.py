@@ -9,9 +9,12 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 
-def send_file(fp, remove_file=False):
+def send_file(fp, file_name=None, remove_file=False):
     try:
-        os.system(f"scp -P 2969 {fp} gishin@59.16.193.79:/home/gishin/vgg")
+        if file_name is not None:
+            os.system(f"scp -P 2969 {fp} gishin@59.16.193.79:/home/gishin/vgg/{file_name}.zip")
+        else:
+            os.system(f"scp -P 2969 {fp} gishin@59.16.193.79:/home/gishin/vgg")
         if remove_file:
             os.remove(fp)
     except:

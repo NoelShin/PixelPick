@@ -76,6 +76,8 @@ class Model:
             # Train the current model with the annotated dataset for n_epochs and validate it.
             # This does not change parameters of the model defined as an attribute of this instance.
             self._val_al_stage()
+            zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query")
+            send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query")
             if nth_query == (self.max_budget // self.n_pixels_per_query):
                 break
 
@@ -359,6 +361,11 @@ class Model:
 
         elif query_strategy == "entropy":
             query = (-prob * torch.log(prob)).sum(dim=1)  # b x h x w
+
+        elif query_strategy == "random":
+            b, _, h, w = prob.shape
+            query = torch.rand((b, h, w))
+
         return query
 
     def _reset_meters(self):
