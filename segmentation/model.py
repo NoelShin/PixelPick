@@ -126,8 +126,8 @@ class Model:
             if self.use_img_inp:
                 from copy import deepcopy
                 merged_mask = dict_data["merged_mask"].unsqueeze(dim=1).repeat((1, 3, 1, 1)).to(torch.bool)
-                img_inp_target = deepcopy(x)
-                # img_inp_target = x.flatten()[merged_mask.flatten()]
+                # img_inp_target = deepcopy(x)
+                img_inp_target = x.flatten()[merged_mask.flatten()]
                 x.flatten()[merged_mask.flatten()] = torch.tensor(x.mean(), device=self.device, dtype=torch.float32)
 
                 # print(img_inp_target)
@@ -167,7 +167,7 @@ class Model:
 
             if self.use_img_inp:
                 img_inp_output = dict_outputs["img_inp"]
-                # img_inp_output = img_inp_output.flatten()[merged_mask.flatten()]
+                img_inp_output = img_inp_output.flatten()[merged_mask.flatten()]
                 dict_losses.update({"img_inp": self.w_img_inp * F.mse_loss(img_inp_output, img_inp_target)})
 
             loss = torch.tensor(0, dtype=torch.float32).to(self.device)

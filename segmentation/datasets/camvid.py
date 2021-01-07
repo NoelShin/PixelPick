@@ -202,7 +202,7 @@ class CamVidDataset(Dataset):
 
             if self.use_img_inp:
                 w, h = x.size
-                merged_mask, list_region_masks_params = self._sample_region_masks(h, w, divider=4, n_patches=8)
+                merged_mask, list_region_masks_params = self._sample_region_masks(h, w, divider=8, n_patches=8)
             else:
                 merged_mask = None
 
