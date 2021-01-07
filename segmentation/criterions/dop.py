@@ -17,6 +17,9 @@ class Criterion:
         self.use_vl = args.use_vl
         self.w_vl = args.w_vl
 
+        self.use_img_inp = args.use_img_inp
+        self.w_img_inp = args.w_img_inp
+
     @staticmethod
     def distance(emb, prototypes, non_isotropic=False, dict_label_counts=None):
         # emb: b x n_emb_dims x h x w, prototypes: n_classes x n_emb_dims
@@ -82,21 +85,6 @@ class Criterion:
 
     @staticmethod
     def _repl(prototypes, non_isotropic=False):
-        # prototypes: n_classes x n_emb_dims
-        # if non_isotropic:
-        #     prototypes = prototypes.transpose(1, 0)  # n_classes x n_emb_dims
-        #     prototypes_1 = prototypes.unsqueeze(dim=1)  # n_emb_dims x 1 x n_classes
-        #     prototypes_2 = prototypes.unsqueeze(dim=2)  # n_emb_dims x n_classes x 1
-        #     dist = (prototypes_1 - prototypes_2).abs()  # n_emb_dims x n_classes x n_classes
-        #     dist = dist.sum(dim=2)  # n_emb_dims x n_classes
-        #     dist = torch.exp(-dist).sum(dim=1)  # n_emb_dims
-        #     dist = dist.mean()
-        #     return dist
-        #
-        # else:
-        #     prototypes_sq = prototypes.pow(exponent=2).sum(dim=1, keepdim=True)  # n_classes x 1
-        #     dist = prototypes_sq - 2 * torch.matmul(prototypes, prototypes.t()) + prototypes_sq.t()  # b x n_classes
-        #     return torch.exp(-dist).sum() / 2.
         return torch.exp(-prototypes.var(dim=0)).mean()
 
     def __call__(self, dict_outputs, prototypes, labels, non_isotropic=False, dict_label_counts=None):
@@ -118,4 +106,5 @@ class Criterion:
         if self.use_repl:
             loss_repl = self._repl(prototypes, non_isotropic=non_isotropic)
             dict_loss.update({"repl": self.w_repl * loss_repl})
+
         return dict_loss

@@ -373,6 +373,10 @@ class Visualiser:
         list_imgs = list()
 
         list_imgs.append(self._preprocess(dict_tensors['input'], seg=False))
+        try:
+            list_imgs.append(self._preprocess(dict_tensors['img_inp_output'], seg=False))
+        except KeyError:
+            pass
         list_imgs.append(self._preprocess(dict_tensors['target'], seg=True))
         list_imgs.append(self._preprocess(dict_tensors['pred'], seg=True))
         list_imgs.append(self._preprocess(dict_tensors['confidence'], seg=False))

@@ -1,8 +1,7 @@
 import os
 from glob import glob
-from copy import copy
-from math import ceil
 from random import random, randint, uniform
+
 import cv2
 from PIL import Image
 import numpy as np
@@ -18,7 +17,6 @@ class CamVidDataset(Dataset):
         super(CamVidDataset, self).__init__()
         self.args = args
         assert os.path.isdir(args.dir_dataset), f"{args.dir_dataset} does not exist."
-        self.active_learning = args.active_learning
         self.seed = args.seed
 
         mode = "test" if val else "train"
@@ -70,6 +68,7 @@ class CamVidDataset(Dataset):
             print("# labelled pixels used for training:", arr_masks.astype(np.int32).sum())
             self.arr_masks = arr_masks
 
+        self.use_img_inp = args.use_img_inp
         self.val = val
         self.query = query
 
@@ -77,21 +76,9 @@ class CamVidDataset(Dataset):
         assert len(queries) == len(self.arr_masks), f"{queries.shape}, {self.arr_masks.shape}"
         previous = self.arr_masks.sum()
         self.arr_masks = np.maximum(self.arr_masks, queries)
-
-        # for img_ind, list_uncertain_pix in dict_img_uncertain_pix.items():
-        #     for uncertain_pix in list_uncertain_pix:
-        #         self.arr_masks[img_ind[uncertain_pix]] = True
         print("# labelled pixels is changed from {} to {}".format(previous, self.arr_masks.sum()))
 
-    # def _add_labels(self, dict_img_uncertain_pix):
-    #     assert len(dict_img_uncertain_pix) == len(self.list_labels)
-    #     previous = self.arr_masks.sum()
-    #     for img_ind, list_uncertain_pix in dict_img_uncertain_pix.items():
-    #         for uncertain_pix in list_uncertain_pix:
-    #             self.arr_masks[img_ind[uncertain_pix]] = True
-    #     print("# labelled pixels is changed from {} to {}".format(previous, self.arr_masks.sum()))
-
-    def _geometric_augmentations(self, x, y, edge=None):
+    def _geometric_augmentations(self, x, y, edge=None, merged_mask=None):
         if self.geometric_augmentations["random_scale"]:
             w, h = x.size
             rs = uniform(0.5, 2.0)
@@ -102,6 +89,9 @@ class CamVidDataset(Dataset):
 
             if edge is not None:
                 edge = TF.resize(edge, (h_resized, w_resized), Image.NEAREST)
+
+            if merged_mask is not None:
+                merged_mask = TF.resize(merged_mask, (h_resized, w_resized), Image.NEAREST)
 
         if self.geometric_augmentations["crop"]:
             w, h = x.size
@@ -114,6 +104,9 @@ class CamVidDataset(Dataset):
             if edge is not None:
                 edge = TF.pad(edge, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
 
+            if merged_mask is not None:
+                merged_mask = TF.pad(merged_mask, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
+
             w, h = x.size
             start_h = randint(0, h - self.crop_size[0])
             start_w = randint(0, w - self.crop_size[1])
@@ -123,6 +116,9 @@ class CamVidDataset(Dataset):
             if edge is not None:
                 edge = TF.crop(edge, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
 
+            if merged_mask is not None:
+                merged_mask = TF.crop(merged_mask, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
+
         if self.geometric_augmentations["random_hflip"]:
             if random() > 0.5:
                 x, y = TF.hflip(x), TF.hflip(y)
@@ -130,12 +126,20 @@ class CamVidDataset(Dataset):
                 if edge is not None:
                     edge = TF.hflip(edge)
 
+                if merged_mask is not None:
+                    merged_mask = TF.hflip(merged_mask)
+
         if edge is not None:
             edge = torch.from_numpy(np.asarray(edge, dtype=np.uint8) // 255)
         else:
-            edge = torch.tensor(-1)
+            edge = torch.tensor(0)
 
-        return x, y, edge
+        if merged_mask is not None:
+            merged_mask = torch.from_numpy(np.asarray(merged_mask, dtype=np.uint8) // 255)
+        else:
+            merged_mask = torch.tensor(0)
+
+        return x, y, edge, merged_mask
 
     def _photometric_augmentations(self, x):
         if self.photometric_augmentations["random_color_jitter"]:
@@ -150,6 +154,36 @@ class CamVidDataset(Dataset):
             smaller_length = min(w, h)
             x = GaussianBlur(kernel_size=int((0.1 * smaller_length // 2 * 2) + 1))(x)
         return x
+
+    def _sample_region_masks(self, h_img, w_img, divider, n_patches):
+        from random import choice, choices
+        size_region_mask = (h_img * w_img) // (divider * n_patches)
+
+        list_factors = self._get_factors(size_region_mask)
+        list_factors = [f for f in list_factors if f < h_img and size_region_mask // f < w_img]
+
+        list_h = choices(list_factors, k=n_patches)
+        list_w = list(size_region_mask // h for h in list_h)
+
+        merged_mask = np.zeros((h_img, w_img), np.uint8)
+        list_region_masks_params = list()
+        for h, w in zip(list_h, list_w):
+            i, j = choice(range(h_img - h)), choice(range(w_img - w))
+            merged_mask[i: i + h, j: j + w] = 1
+            list_region_masks_params.append((i, j, h, w))
+
+        merged_mask = Image.fromarray(merged_mask * 255)  #.show()
+        return merged_mask, list_region_masks_params
+
+    @staticmethod
+    def _get_factors(n):
+        list_factors = [1]
+        from math import ceil
+        for t in range(2, (ceil((n / 2) + 1))):
+            if n % t == 0:
+                list_factors.append(t)
+        list_factors.append(n)
+        return list_factors
 
     def __len__(self):
         return len(self.list_inputs)
@@ -166,17 +200,20 @@ class CamVidDataset(Dataset):
             else:
                 mask = None
 
-            x, y, mask = self._geometric_augmentations(x, y, mask)
+            if self.use_img_inp:
+                w, h = x.size
+                merged_mask, list_region_masks_params = self._sample_region_masks(h, w, divider=4, n_patches=8)
+            else:
+                merged_mask = None
+
+            x, y, mask, merged_mask = self._geometric_augmentations(x, y, mask, merged_mask)
             x = self._photometric_augmentations(x)
 
             if self.geometric_augmentations["random_scale"]:
                 dict_data.update({"pad_size": self.pad_size})
-            dict_data.update({'mask': mask})
+            dict_data.update({'mask': mask, 'merged_mask': merged_mask})
 
         dict_data.update({'x': TF.to_tensor(x), 'y': torch.tensor(np.asarray(y, np.int64), dtype=torch.long)})
-
-        if self.active_learning:
-            dict_data.update({'ind': ind})
         return dict_data
 
 

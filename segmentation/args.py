@@ -32,6 +32,10 @@ class Arguments:
         parser.add_argument("--dir_datasets", type=str, default="/scratch/shared/beegfs/gyungin/datasets")
         parser.add_argument("--use_augmented_dataset", action="store_true", default=False, help="whether to use the augmented dataset for pascal voc")
 
+        # image inpainting loss
+        parser.add_argument("--use_img_inp", action="store_true", default=False, help="image inpainting loss")
+        parser.add_argument("--w_img_inp", type=float, default=1, help="weight for image inpainting loss")
+
         # gcpl
         parser.add_argument("--ignore_bg", action="store_true", default=False, help="ignore_bg of voc datasets")
         parser.add_argument("--n_prototypes", type=int, default=1)
@@ -57,7 +61,7 @@ class Arguments:
 
         args.stride_total = 8 if args.use_dilated_resnet else 32
         if args.dataset_name == "cv":
-            args.batch_size = 5
+            args.batch_size = 3
             args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/camvid"
             args.ignore_index = 11
             args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
@@ -164,8 +168,9 @@ class Arguments:
 
         # query strategy
         list_keywords.append(f"{args.query_strategy}")
-
         list_keywords.append(f"n_pixels_{args.n_pixels_per_img}")
+        list_keywords.append("img_inp") if args.use_img_inp else None
+
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None
         list_keywords.append("debug") if args.debug else None

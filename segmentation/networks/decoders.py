@@ -8,6 +8,7 @@ class FPNDecoder(nn.Module):
         super(FPNDecoder, self).__init__()
         n_classes = args.n_classes
         use_softmax = args.use_softmax
+        use_img_inp = args.use_img_inp
 
         self.lat_layer_0 = nn.Conv2d(2048, 256, 1)
         self.lat_layer_1 = nn.Conv2d(1024, 256, 1)
@@ -43,8 +44,12 @@ class FPNDecoder(nn.Module):
         else:
             self.fc = nn.Conv2d(128, args.n_emb_dims, 1)
 
+        if use_img_inp:
+            self.fc_img_inp = nn.Conv2d(128, 3, 1)
+
         self.apply(self._init)
         self.use_softmax = use_softmax
+        self.use_img_inp = use_img_inp
 
     def forward(self, list_inter_features,  return_output_emb=False):
         dict_outputs = dict()
@@ -67,6 +72,8 @@ class FPNDecoder(nn.Module):
         else:
             dict_outputs.update({"emb": self.fc(emb)})
 
+        if self.use_img_inp:
+            dict_outputs.update({"img_inp": self.fc_img_inp(emb)})
         return dict_outputs
 
     @staticmethod

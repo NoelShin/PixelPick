@@ -34,6 +34,7 @@ class Model:
         self.nth_query = -1
         self.stride_total = args.stride_total
         self.use_softmax = args.use_softmax
+        self.use_img_inp = args.use_img_inp
 
         self.device = torch.device("cuda:{:s}".format(args.gpu_ids) if torch.cuda.is_available() else "cpu:0")
         self.dataloader = get_dataloader(args, val=False, query=False,
@@ -60,6 +61,8 @@ class Model:
         self.running_loss = AverageMeter()
         self.running_miou = AverageMeter()
         self.running_pixel_acc = AverageMeter()
+
+        self.w_img_inp = args.w_img_inp
 
     def __call__(self):
         for nth_query in range(self.max_budget // self.n_pixels_per_query + 1):
@@ -120,6 +123,17 @@ class Model:
                 mask = dict_data['mask'].to(self.device, torch.bool)
                 y.flatten()[~mask.flatten()] = self.ignore_index
 
+            if self.use_img_inp:
+                from copy import deepcopy
+                merged_mask = dict_data["merged_mask"].unsqueeze(dim=1).repeat((1, 3, 1, 1)).to(torch.bool)
+                img_inp_target = deepcopy(x)
+                # img_inp_target = x.flatten()[merged_mask.flatten()]
+                x.flatten()[merged_mask.flatten()] = torch.tensor(x.mean(), device=self.device, dtype=torch.float32)
+
+                # print(img_inp_target)
+                # print(x.flatten()[merged_mask.flatten()])
+                # exit(12)
+
             dict_outputs = model(x)
 
             if self.use_softmax:
@@ -150,6 +164,11 @@ class Model:
                 prob = F.softmax(-dist.detach(), dim=1)
 
                 dict_losses = self.criterion(dict_outputs, prototypes, labels=y)
+
+            if self.use_img_inp:
+                img_inp_output = dict_outputs["img_inp"]
+                # img_inp_output = img_inp_output.flatten()[merged_mask.flatten()]
+                dict_losses.update({"img_inp": self.w_img_inp * F.mse_loss(img_inp_output, img_inp_target)})
 
             loss = torch.tensor(0, dtype=torch.float32).to(self.device)
 
@@ -191,12 +210,15 @@ class Model:
         margin = self._query(prob, 'margin_sampling')
         entropy = self._query(prob, 'entropy')
 
-        dict_tensors = {'input': dict_data['x'][0].cpu(),
+        dict_tensors = {'input': x[0].cpu(),  # dict_data['x'][0].cpu(),
                         'target': dict_data['y'][0].cpu(),
                         'pred': pred[0].detach().cpu(),
                         'confidence': -confidence[0].cpu(),  # minus sign is to draw more uncertain part brighter
                         'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
                         'entropy': entropy[0].cpu()}
+
+        if self.use_img_inp:
+            dict_tensors.update({'img_inp_output': dict_outputs["img_inp"][0].detach().cpu()})
 
         self.vis(dict_tensors, fp=fp)
         return model, optimizer, prototypes
