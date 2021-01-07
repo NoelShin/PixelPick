@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 
 class CamVidDataset(Dataset):
-    def __init__(self, args, val=False):
+    def __init__(self, args, val=False, query=False):
         super(CamVidDataset, self).__init__()
         self.args = args
         assert os.path.isdir(args.dir_dataset), f"{args.dir_dataset} does not exist."
@@ -43,7 +43,7 @@ class CamVidDataset(Dataset):
 
         self.arr_masks = None
 
-        if args.n_pixels_per_img != 0 and not val:
+        if args.n_pixels_per_img != 0 and not val and not query:
             np.random.seed(self.seed)
 
             label = Image.open(self.list_labels[0]).convert("RGB")
@@ -71,14 +71,25 @@ class CamVidDataset(Dataset):
             self.arr_masks = arr_masks
 
         self.val = val
+        self.query = query
 
-    def _add_labels(self, dict_img_uncertain_pix):
-        assert len(dict_img_uncertain_pix) == len(self.list_labels)
+    def label_queries(self, queries):
+        assert len(queries) == len(self.arr_masks), f"{queries.shape}, {self.arr_masks.shape}"
         previous = self.arr_masks.sum()
-        for img_ind, list_uncertain_pix in dict_img_uncertain_pix.items():
-            for uncertain_pix in list_uncertain_pix:
-                self.arr_masks[img_ind[uncertain_pix]] = True
+        self.arr_masks = np.maximum(self.arr_masks, queries)
+
+        # for img_ind, list_uncertain_pix in dict_img_uncertain_pix.items():
+        #     for uncertain_pix in list_uncertain_pix:
+        #         self.arr_masks[img_ind[uncertain_pix]] = True
         print("# labelled pixels is changed from {} to {}".format(previous, self.arr_masks.sum()))
+
+    # def _add_labels(self, dict_img_uncertain_pix):
+    #     assert len(dict_img_uncertain_pix) == len(self.list_labels)
+    #     previous = self.arr_masks.sum()
+    #     for img_ind, list_uncertain_pix in dict_img_uncertain_pix.items():
+    #         for uncertain_pix in list_uncertain_pix:
+    #             self.arr_masks[img_ind[uncertain_pix]] = True
+    #     print("# labelled pixels is changed from {} to {}".format(previous, self.arr_masks.sum()))
 
     def _geometric_augmentations(self, x, y, edge=None):
         if self.geometric_augmentations["random_scale"]:
@@ -122,7 +133,7 @@ class CamVidDataset(Dataset):
         if edge is not None:
             edge = torch.from_numpy(np.asarray(edge, dtype=np.uint8) // 255)
         else:
-            edge = torch.tensor(0)
+            edge = torch.tensor(-1)
 
         return x, y, edge
 
@@ -148,7 +159,8 @@ class CamVidDataset(Dataset):
 
         x, y = Image.open(self.list_inputs[ind]).convert("RGB"), Image.open(self.list_labels[ind])
 
-        if not self.val:
+        # if not val nor query dataset, do augmentation
+        if not self.val and not self.query:
             if self.arr_masks is not None:
                 mask = Image.fromarray(self.arr_masks[ind].astype(np.uint8) * 255)
             else:
@@ -159,10 +171,10 @@ class CamVidDataset(Dataset):
 
             if self.geometric_augmentations["random_scale"]:
                 dict_data.update({"pad_size": self.pad_size})
-
             dict_data.update({'mask': mask})
 
         dict_data.update({'x': TF.to_tensor(x), 'y': torch.tensor(np.asarray(y, np.int64), dtype=torch.long)})
+
         if self.active_learning:
             dict_data.update({'ind': ind})
         return dict_data

@@ -39,21 +39,22 @@ def main(args):
 
     model = FPNSeg(args).to(device)
     print("\nExperim name:", args.experim_name + '\n')
-    prototypes = init_prototypes(args.n_classes,
-                                 args.n_emb_dims,
-                                 args.n_prototypes,
-                                 mode='mean',
-                                 model=model,
-                                 dataset=dataset,
-                                 ignore_index=args.ignore_index,
-                                 learnable=args.model_name == "gcpl_seg",
-                                 device=device)
+    if not args.use_softmax:
+        prototypes = init_prototypes(args.n_classes,
+                                     args.n_emb_dims,
+                                     args.n_prototypes,
+                                     mode='mean',
+                                     model=model,
+                                     dataset=dataset,
+                                     ignore_index=args.ignore_index,
+                                     learnable=args.model_name == "gcpl_seg",
+                                     device=device)
 
     if args.model_name == "mp_seg":
         prototypes_updater = EMA(args.momentum_prototypes)
 
     criterion = get_criterion(args, device)
-    optimizer = get_optimizer(args, model, prototypes=prototypes if args.model_name == "gcpl_seg" else None)
+    optimizer = get_optimizer(args, model, prototypes=prototypes if not args.use_softmax else None)
     lr_scheduler = get_lr_scheduler(args, optimizer=optimizer, iters_per_epoch=len(dataloader))
     validator = get_validator(args)
     vis = Visualiser(args.dataset_name)
@@ -105,7 +106,8 @@ def main(args):
                     dict_label_emb.update({label: emb_label})
 
                 dict_outputs.update({"dict_label_emb": dict_label_emb})
-                pred, confidence = prediction(emb.detach(), prototypes.detach(), return_confidence=True)
+                pred, dist = prediction(emb.detach(), prototypes.detach(), return_distance=True)
+                confidence = F.softmax(-dist, dim=1).max(dim=1)[0]
 
                 dict_losses = criterion(dict_outputs, prototypes, labels=y)
 
@@ -156,19 +158,18 @@ def main(args):
         dict_tensors = {'input': dict_data['x'][0].cpu(),
                         'target': dict_data['y'][0].cpu(),
                         'pred': pred[0].detach().cpu(),
-                        'confidence': -confidence[0].detach().cpu()}
-        # minus sign is to draw uncertain part bright
+                        'confidence': -confidence[0].detach().cpu()}  # minus sign is to make (un)certain part dark (bright)
 
         vis(dict_tensors, fp=f"{args.dir_checkpoints}/train/{e}.png")
 
         if e % 5 == 0:
-            validator(model, prototypes, e)
+            validator(model, e, prototypes=prototypes if not args.use_softmax else None)
 
         if args.debug:
             break
 
     zip_file = zip_dir(args.dir_checkpoints)
-    send_file(zip_file)
+    # send_file(zip_file)
 
 
 if __name__ == '__main__':

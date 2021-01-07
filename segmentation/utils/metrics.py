@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 
 
-def prediction(emb, prototypes, non_isotropic=False, return_confidence=False):
+def prediction(emb, prototypes, non_isotropic=False, return_distance=False):
     # emb: b x n_emb_dims x h x w
     # prototypes: n_classes x n_emb_dims
     b, n_emb_dims, h, w = emb.shape
@@ -33,8 +33,8 @@ def prediction(emb, prototypes, non_isotropic=False, return_confidence=False):
         dist = dist.view(b * h * w, n_classes, n_prototypes).sum(dim=-1)  # (b x h x w) x n_classes
         dist = dist.transpose(1, 0).view(-1, b, h, w).transpose(1, 0)  # b x n_classes h x w
 
-        if return_confidence:
-            return dist.argmin(dim=1), F.softmax(-dist, dim=1).max(dim=1)[0]
+        if return_distance:
+            return dist.argmin(dim=1), dist
         else:
             return dist.argmin(dim=1)
 

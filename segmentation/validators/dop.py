@@ -37,7 +37,7 @@ class Validator:
         self.use_softmax = args.use_softmax
         self.vis = Visualiser(self.dataset_name)
 
-    def __call__(self, model, prototypes, epoch, dict_label_counts=None):
+    def __call__(self, model, epoch, prototypes=None, dict_label_counts=None):
         model.eval()
 
         running_miou = AverageMeter()
@@ -72,8 +72,8 @@ class Validator:
 
                 else:
                     emb = dict_outputs['emb']
-                    pred, confidence = prediction(emb, prototypes, non_isotropic=self.non_isotropic,
-                                                  return_confidence=True)
+                    pred, dist = prediction(emb, prototypes, non_isotropic=self.non_isotropic, return_distance=True)
+                    confidence = F.softmax(-dist, dim=1).max(dim=1)[0]
 
                     if self.dataset_name == "voc":
                         pred.flatten()[confidence.flatten() < 0.5] = -1

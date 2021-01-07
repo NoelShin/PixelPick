@@ -4,6 +4,7 @@ from time import sleep
 
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 from PIL import Image
 import matplotlib.pyplot as plt
 
@@ -42,6 +43,26 @@ def write_log(fp, list_entities=None, header=None):
 def get_criterion(args, device):
     from criterions.dop import Criterion
     return Criterion(args, device)
+
+
+def get_dataloader(args, batch_size, n_workers, shuffle, val=False, query=False):
+    if args.dataset_name == "cv":
+        from datasets.camvid import CamVidDataset
+        dataset = CamVidDataset(args, val, query=query)
+
+    elif args.dataset_name == "voc":
+        from datasets.voc import VOC2012Segmentation
+        dataset = VOC2012Segmentation(args, val)
+
+    else:
+        raise ValueError(args.dataset_name)
+
+    dataloader = DataLoader(dataset,
+                            batch_size=batch_size,
+                            num_workers=n_workers,
+                            shuffle=shuffle,
+                            drop_last=True if len(dataset) % batch_size != 0 else False)
+    return dataloader
 
 
 def get_optimizer(args, model, prototypes=None):
@@ -331,7 +352,8 @@ class Visualiser:
         arr = np.clip(tensor.numpy(), 0, 255).astype(np.uint8)
         return Image.fromarray(arr).resize((w // downsample, h // downsample))
 
-    def _make_grid(self, list_imgs):
+    @staticmethod
+    def _make_grid(list_imgs):
         width = 0
         height = list_imgs[0].height
         for img in list_imgs:
@@ -346,11 +368,18 @@ class Visualiser:
 
     def __call__(self, dict_tensors, fp='', show=False):
         list_imgs = list()
-        for name, tensor in dict_tensors.items():
-            list_imgs.append(self._preprocess(tensor, seg=name in ['target', 'pred']))
+
+        list_imgs.append(self._preprocess(dict_tensors['input'], seg=False))
+        list_imgs.append(self._preprocess(dict_tensors['target'], seg=True))
+        list_imgs.append(self._preprocess(dict_tensors['pred'], seg=True))
+        list_imgs.append(self._preprocess(dict_tensors['confidence'], seg=False))
+        list_imgs.append(self._preprocess(dict_tensors['margin'], seg=False))
+        list_imgs.append(self._preprocess(dict_tensors['entropy'], seg=False))
+
+        # for name, tensor in dict_tensors.items():
+        #     list_imgs.append(self._preprocess(tensor, seg=name in ['target', 'pred']))
 
         img = self._make_grid(list_imgs)
-        #make_grid(list_imgs, nrow=len(list_imgs))
 
         if fp:
             img.save(fp)

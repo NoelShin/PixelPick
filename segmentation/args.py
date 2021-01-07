@@ -18,16 +18,17 @@ class Arguments:
 
         # active learning
         parser.add_argument("--active_learning", action="store_true", default=False)
-        parser.add_argument("--epoch_add_labels", type=int, default=5)
-        parser.add_argument("--n_add_labels", type=int, default=5)
-        parser.add_argument("--n_pixels_per_add_labels", type=int, default=1)
+        parser.add_argument("--n_pixels_per_query", type=int, default=10, help="# pixels for labelling")
+        parser.add_argument("--n_epochs_query", type=int, default=20, help="interval between queries in epoch")
+        parser.add_argument("--max_budget", type=int, default=100, help="maximum budget in pixels per image")
+        parser.add_argument("--query_strategy", type=str, default="least_confidence", choices=["least_confidence", "margin_sampling", "entropy"])
 
         # system
         parser.add_argument("--gpu_ids", type=str, nargs='+', default='0')
         parser.add_argument("--n_workers", type=int, default=4)
 
         # dataset
-        parser.add_argument("--dataset_name", type=str, default="voc", choices=["cv", "voc"])
+        parser.add_argument("--dataset_name", type=str, default="cv", choices=["cv", "voc"])
         parser.add_argument("--dir_datasets", type=str, default="/scratch/shared/beegfs/gyungin/datasets")
         parser.add_argument("--use_augmented_dataset", action="store_true", default=False, help="whether to use the augmented dataset for pascal voc")
 
@@ -36,7 +37,7 @@ class Arguments:
         parser.add_argument("--n_prototypes", type=int, default=1)
         parser.add_argument("--loss_type", type=str, default="dce", choices=["dce"])
         parser.add_argument("--use_pl", action="store_true", default=False, help="prototype loss")
-        parser.add_argument("--w_pl", type=float, default=0.001, help="weight for prototype loss")
+        parser.add_argument("--w_pl", type=float, default=1, help="weight for prototype loss")
         parser.add_argument("--use_repl", action="store_true", default=False, help="repulsive loss")
         parser.add_argument("--w_repl", type=float, default=1, help="weight for repulsive loss")
         parser.add_argument("--use_vl", action="store_true", default=False, help="prototype loss")
@@ -87,7 +88,7 @@ class Arguments:
             }
 
         elif args.dataset_name == "voc":
-            args.batch_size = 9
+            args.batch_size = 10
             args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/VOC2012"
             args.dir_augmented_dataset = "/scratch/shared/beegfs/gyungin/datasets/VOC2012/VOCdevkit/VOC2012/train_aug"
             args.ignore_index = 255
@@ -161,21 +162,24 @@ class Arguments:
                 list_keywords.append("repl")
                 list_keywords.append(str(args.w_repl))
 
+        # query strategy
+        list_keywords.append(f"{args.query_strategy}")
+
         list_keywords.append(f"n_pixels_{args.n_pixels_per_img}")
         list_keywords.append(str(args.seed))
-        list_keywords.append(args.suffix) if args.suffix is not '' else None
+        list_keywords.append(args.suffix) if args.suffix != '' else None
         list_keywords.append("debug") if args.debug else None
         args.experim_name = '_'.join(list_keywords)
 
         # create dirs
         args.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
-        os.makedirs(f"{args.dir_checkpoints}/train", exist_ok=True)
-        os.makedirs(f"{args.dir_checkpoints}/val", exist_ok=True)
-
-        # initialise logs
-        args.log_train = f"{args.dir_checkpoints}/log_train.txt"
-        args.log_val = f"{args.dir_checkpoints}/log_val.txt"
-        write_log(args.log_train, header=["epoch", "mIoU", "pixel_acc", "loss"])
-        write_log(args.log_val, header=["epoch", "mIoU", "pixel_acc"])
-
+        # os.makedirs(f"{args.dir_checkpoints}/train", exist_ok=True)
+        # os.makedirs(f"{args.dir_checkpoints}/val", exist_ok=True)
+        #
+        # # initialise logs
+        # args.log_train = f"{args.dir_checkpoints}/log_train.txt"
+        # args.log_val = f"{args.dir_checkpoints}/log_val.txt"
+        # write_log(args.log_train, header=["epoch", "mIoU", "pixel_acc", "loss"])
+        # write_log(args.log_val, header=["epoch", "mIoU", "pixel_acc"])
+        print("model name:", args.experim_name)
         return args
