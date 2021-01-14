@@ -187,6 +187,8 @@ class Arguments:
         list_keywords.append("vote") if args.use_mc_dropout else None
         list_keywords.append(f"n_pixels_{args.n_pixels_per_img}")
         list_keywords.append("img_inp") if args.use_img_inp else None
+        list_keywords.append("ced") if args.use_img_inp and args.use_ced else None
+        list_keywords.append("va") if args.use_visual_acuity else None
 
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None
