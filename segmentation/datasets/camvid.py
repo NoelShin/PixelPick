@@ -269,7 +269,10 @@ class CamVidDataset(Dataset):
 
             if self.geometric_augmentations["random_scale"]:
                 dict_data.update({"pad_size": self.pad_size})
-            dict_data.update({'mask': mask, 'merged_mask': merged_mask, "x_clean": TF.to_tensor(x_clean)})
+            dict_data.update({'mask': mask, 'merged_mask': merged_mask})
+
+            if self.use_visual_acuity:
+                dict_data.update({"x_clean": TF.to_tensor(x_clean)})
 
         dict_data.update({'x': TF.to_tensor(x), 'y': torch.tensor(np.asarray(y, np.int64), dtype=torch.long)})
         return dict_data
