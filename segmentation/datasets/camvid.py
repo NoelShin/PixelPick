@@ -41,32 +41,39 @@ class CamVidDataset(Dataset):
 
         self.arr_masks = None
 
-        if args.n_pixels_per_img != 0 and not val and not query:
-            np.random.seed(self.seed)
+        path_arr_masks = f"{args.dir_dataset}/{mode}/init_labelled_pixels_{self.seed}.npy"
+        if args.n_pixels_per_img != 0 and not val:
+            if os.path.isfile(path_arr_masks):
+                self.arr_masks = np.load(path_arr_masks)
 
-            label = Image.open(self.list_labels[0]).convert("RGB")
+            else:
+                np.random.seed(self.seed)
+                label = Image.open(self.list_labels[0]).convert("RGB")
 
-            list_masks = list()
+                list_masks = list()
 
-            w, h = label.size
-            n_pixels_per_img = h * w if args.n_pixels_per_img == 0 else args.n_pixels_per_img
+                w, h = label.size
+                n_pixels_per_img = h * w if args.n_pixels_per_img == 0 else args.n_pixels_per_img
 
-            for _ in tqdm(range(len(self.list_labels))):
-                mask = np.zeros((h, w), dtype=np.bool)
-                mask_flat = mask.flatten()
+                for _ in tqdm(range(len(self.list_labels))):
+                    mask = np.zeros((h, w), dtype=np.bool)
+                    mask_flat = mask.flatten()
 
-                # pseudo-random numbers
-                ind_chosen_pixels = np.random.choice(range(len(mask_flat)), n_pixels_per_img, replace=False)
+                    # pseudo-random numbers
+                    ind_chosen_pixels = np.random.choice(range(len(mask_flat)), n_pixels_per_img, replace=False)
 
-                mask_flat[ind_chosen_pixels] += True
+                    mask_flat[ind_chosen_pixels] += True
 
-                mask = mask_flat.reshape((h, w))
-                list_masks.append(mask)
+                    mask = mask_flat.reshape((h, w))
+                    list_masks.append(mask)
 
-            arr_masks = np.array(list_masks, dtype=np.bool)
+                arr_masks = np.array(list_masks, dtype=np.bool)
 
-            print("# labelled pixels used for training:", arr_masks.astype(np.int32).sum())
-            self.arr_masks = arr_masks
+                # save initial labelled pixels for a future reproduction
+                np.save(path_arr_masks, arr_masks)
+
+                print("# labelled pixels used for training:", arr_masks.astype(np.int32).sum())
+                self.arr_masks = arr_masks
 
         self.use_img_inp = args.use_img_inp
         self.val = val
@@ -172,7 +179,7 @@ class CamVidDataset(Dataset):
             merged_mask[i: i + h, j: j + w] = 1
             list_region_masks_params.append((i, j, h, w))
 
-        merged_mask = Image.fromarray(merged_mask * 255)  #.show()
+        merged_mask = Image.fromarray(merged_mask * 255)
         return merged_mask, list_region_masks_params
 
     @staticmethod

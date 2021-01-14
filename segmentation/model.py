@@ -9,16 +9,20 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from networks.model import FPNSeg
+from networks.deeplab import DeepLab
 from networks.modules import init_prototypes, init_radii, EMA
+from utils.class_histogram import ClassHistogram
 from utils.metrics import prediction, eval_metrics
 from utils.utils import get_dataloader, get_criterion, get_optimizer, get_lr_scheduler, get_validator, AverageMeter
 from utils.utils import write_log, send_file, Visualiser, zip_dir
+from al_selectors.query import QuerySelector
 
 
 class Model:
     def __init__(self, args):
         # common args
         self.args = args
+        self.best_miou = -1.0
         self.dataset_name = args.dataset_name
         self.debug = args.debug
         self.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
@@ -43,19 +47,25 @@ class Model:
                                                shuffle=False, batch_size=1, n_workers=args.n_workers)
         self.dataloader_val = get_dataloader(args, val=True, query=False,
                                              shuffle=False, batch_size=1, n_workers=args.n_workers)
-        self.model = FPNSeg(args).to(self.device)
-        self.prototypes = init_prototypes(args.n_classes, args.n_emb_dims, args.n_prototypes,
-                                          mode='mean',
-                                          model=self.model,
-                                          dataset=self.dataloader.dataset,
-                                          ignore_index=args.ignore_index,
-                                          learnable=args.model_name == "gcpl_seg",
-                                          device=self.device) if not self.use_softmax else None
+        if args.network_name == "FPN":
+            self.model = FPNSeg(args).to(self.device)
+        else:
+            self.model = DeepLab(args).to(self.device)
+
+        # self.prototypes = init_prototypes(args.n_classes, args.n_emb_dims, args.n_prototypes,
+        #                                   mode='mean',
+        #                                   model=self.model,
+        #                                   dataset=self.dataloader.dataset,
+        #                                   ignore_index=args.ignore_index,
+        #                                   learnable=args.model_name == "gcpl_seg",
+        #                                   device=self.device) if not self.use_softmax else None
         self.criterion = get_criterion(args, self.device)
-        self.optimizer = get_optimizer(args, self.model, prototypes=self.prototypes)
-        self.lr_scheduler = get_lr_scheduler(args, optimizer=self.optimizer, iters_per_epoch=len(self.dataloader))
+        # self.optimizer = get_optimizer(args, self.model, prototypes=self.prototypes)
+        # self.lr_scheduler = get_lr_scheduler(args, optimizer=self.optimizer, iters_per_epoch=len(self.dataloader))
         self.vis = Visualiser(args.dataset_name)
         self.query_strategy = args.query_strategy
+
+        self.query_selector = QuerySelector(args, self.dataloader_query)
 
         # for tracking stats
         self.running_loss = AverageMeter()
@@ -64,59 +74,49 @@ class Model:
 
         self.w_img_inp = args.w_img_inp
 
+        self.model_name = args.model_name
+        self.network_name = args.network_name
+        self.n_emb_dims = args.n_emb_dims
+        self.n_prototypes = args.n_prototypes
+
     def __call__(self):
         for nth_query in range(self.max_budget // self.n_pixels_per_query + 1):
             os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
             write_log(f"{self.dir_checkpoints}/{nth_query}_query/log_train.txt",
-                      header=["epoch", "mIoU", "pixel_acc", "loss"])
-            write_log(f"{self.dir_checkpoints}/{nth_query}_query/log_train_query.txt",
                       header=["epoch", "mIoU", "pixel_acc", "loss"])
             write_log(f"{self.dir_checkpoints}/{nth_query}_query/log_val.txt",
                       header=["epoch", "mIoU", "pixel_acc"])
 
             self.nth_query = nth_query
 
-            # Train the current model with the annotated dataset for n_epochs and validate it.
-            # This does not change parameters of the model defined as an attribute of this instance.
-            self._val_al_stage()
-            zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query")
-            send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query")
-            if nth_query == (self.max_budget // self.n_pixels_per_query):
-                break
-
-            # Train the model with the current dataset for n_epochs_query (not to be confused with n_epochs).
-            # This updates parameters of the model defined as an attribute of this instance.
             self._train()
 
+            # draw histograms
+            ClassHistogram(self.args, nth_query).draw_hist() #dst=f"{self.dir_checkpoints}/{nth_query}_query")
+
+            # zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query")
+            # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query")
+            if nth_query == (self.max_budget // self.n_pixels_per_query) or self.n_pixels_per_img == 0:
+                break
+
             # select queries using the current model and label them.
-            queries = self._select_queries()
+            queries = self.query_selector(nth_query)
             self.dataloader.dataset.label_queries(queries)
         return
 
-    def _train_epoch(self, epoch, model=None, optimizer=None, prototypes=None):
-        print(f"training an epoch {epoch} of {self.nth_query}th query")
-        if any(i is not None for i in [model, optimizer, prototypes]):
-            assert all(i is not None for i in [model, optimizer, prototypes]) is not None
-
-            log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_train.txt"
-            fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
-
-        else:
-            model = copy(self.model)
-            optimizer = copy(self.optimizer)
-            prototypes = copy(self.prototypes)
-
-            log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_train_query.txt"
-            fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train_query.png"
+    def _train_epoch(self, epoch, model, optimizer, prototypes=None):
+        if self.n_pixels_per_img != 0:
+            print(f"training an epoch {epoch} of {self.nth_query}th query ({self.dataloader.dataset.arr_masks.sum()} labelled pixels)")
+        log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_train.txt"
+        fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
 
         model.train()
         dataloader_iter = iter(self.dataloader)
         tbar = tqdm(range(len(self.dataloader)))
 
+        total_inter, total_union = 0, 0
+        total_correct, total_label = 0, 0
         for batch_ind in tbar:
-            total_inter, total_union = 0, 0
-            total_correct, total_label = 0, 0
-
             dict_data = next(dataloader_iter)
             x, y = dict_data['x'].to(self.device), dict_data['y'].to(self.device)
             if self.n_pixels_per_img != 0:
@@ -124,23 +124,17 @@ class Model:
                 y.flatten()[~mask.flatten()] = self.ignore_index
 
             if self.use_img_inp:
-                from copy import deepcopy
                 merged_mask = dict_data["merged_mask"].unsqueeze(dim=1).repeat((1, 3, 1, 1)).to(torch.bool)
-                # img_inp_target = deepcopy(x)
-                img_inp_target = x.flatten()[merged_mask.flatten()]
+                img_inp_target = deepcopy(x)
+                # img_inp_target = x.flatten()[merged_mask.flatten()]
                 x.flatten()[merged_mask.flatten()] = torch.tensor(x.mean(), device=self.device, dtype=torch.float32)
 
-                # print(img_inp_target)
-                # print(x.flatten()[merged_mask.flatten()])
-                # exit(12)
-
             dict_outputs = model(x)
-
             if self.use_softmax:
                 logits = dict_outputs["pred"]
                 dict_losses = {"ce": F.cross_entropy(logits, y, ignore_index=self.ignore_index)}
                 pred = logits.argmax(dim=1)  # for computing mIoU, pixel acc.
-                prob = F.softmax(logits.detach())
+                prob = F.softmax(logits.detach(), dim=1)
 
             else:
                 emb = dict_outputs['emb']  # b x n_emb_dims x h x w
@@ -167,7 +161,7 @@ class Model:
 
             if self.use_img_inp:
                 img_inp_output = dict_outputs["img_inp"]
-                img_inp_output = img_inp_output.flatten()[merged_mask.flatten()]
+                # img_inp_output = img_inp_output.flatten()[merged_mask.flatten()]
                 dict_losses.update({"img_inp": self.w_img_inp * F.mse_loss(img_inp_output, img_inp_target)})
 
             loss = torch.tensor(0, dtype=torch.float32).to(self.device)
@@ -200,33 +194,43 @@ class Model:
                                             self.running_pixel_acc.avg,
                                             self.running_loss.avg))
 
-            # if self.debug:
-            #     break
+            if self.debug:
+                break
 
         write_log(log, list_entities=[epoch, self.running_miou.avg, self.running_pixel_acc.avg, self.running_loss.avg])
         self._reset_meters()
 
-        confidence = self._query(prob, 'least_confidence')  # prob.max(dim=1)[0]
-        margin = self._query(prob, 'margin_sampling')
-        entropy = self._query(prob, 'entropy')
-
-        dict_tensors = {'input': x[0].cpu(),  # dict_data['x'][0].cpu(),
-                        'target': dict_data['y'][0].cpu(),
-                        'pred': pred[0].detach().cpu(),
-                        'confidence': -confidence[0].cpu(),  # minus sign is to draw more uncertain part brighter
-                        'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
-                        'entropy': entropy[0].cpu()}
-
-        if self.use_img_inp:
-            dict_tensors.update({'img_inp_output': dict_outputs["img_inp"][0].detach().cpu()})
-
-        self.vis(dict_tensors, fp=fp)
+        # confidence = self._query(prob, 'least_confidence')  # prob.max(dim=1)[0]
+        # margin = self._query(prob, 'margin_sampling')
+        # entropy = self._query(prob, 'entropy')
+        #
+        # dict_tensors = {'input': x[0].cpu(),  # dict_data['x'][0].cpu(),
+        #                 'target': dict_data['y'][0].cpu(),
+        #                 'pred': pred[0].detach().cpu(),
+        #                 'confidence': -confidence[0].cpu(),  # minus sign is to draw more uncertain part brighter
+        #                 'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
+        #                 'entropy': entropy[0].cpu()}
+        #
+        # if self.use_img_inp:
+        #     dict_tensors.update({'img_inp_output': dict_outputs["img_inp"][0].detach().cpu()})
+        #
+        # self.vis(dict_tensors, fp=fp)
         return model, optimizer, prototypes
 
-    def _val_al_stage(self):
-        print(f"\n ({self.experim_name}) validating active learning stage {self.nth_query}...\n")
-        model = deepcopy(self.model)
-        prototypes = deepcopy(self.prototypes)
+    def _train(self):
+        print(f"\n ({self.experim_name}) training...\n")
+        if self.network_name == "FPN":
+            model = FPNSeg(self.args).to(self.device)
+        else:
+            model = DeepLab(self.args).to(self.device)
+        prototypes = init_prototypes(self.n_classes, self.n_emb_dims, self.n_prototypes,
+                                     mode='mean',
+                                     model=self.model,
+                                     dataset=self.dataloader.dataset,
+                                     ignore_index=self.ignore_index,
+                                     learnable=self.model_name == "gcpl_seg",
+                                     device=self.device) if not self.use_softmax else None
+
         optimizer = get_optimizer(self.args, model, prototypes=prototypes)
         lr_scheduler = get_lr_scheduler(self.args, optimizer=optimizer, iters_per_epoch=len(self.dataloader))
 
@@ -236,14 +240,7 @@ class Model:
             self._val(e, model, prototypes)
             if self.debug:
                 break
-        return
-
-    def _train(self):
-        print(f"\n ({self.experim_name}) training...\n")
-        for e in range(1, 1 + self.n_epochs_query):
-            self._train_epoch(e)
-            if self.debug:
-                break
+        self.best_miou = -1.0
         return
 
     def _val(self, epoch, model, prototypes=None):
@@ -277,7 +274,7 @@ class Model:
                 if self.use_softmax:
                     logits = dict_outputs['pred']
                     pred = logits.argmax(dim=1)
-                    prob = F.softmax(logits.detach())
+                    prob = F.softmax(logits.detach(), dim=1)
 
                 else:
                     emb = dict_outputs['emb']
@@ -306,6 +303,20 @@ class Model:
                 if self.debug:
                     break
 
+        if self.running_miou.avg > self.best_miou:
+            state_dict = dict()
+            state_dict_model = model.state_dict()
+            state_dict.update({"model": state_dict_model})
+            if not self.use_softmax:
+                # state_dict_prototypes = prototypes.state_dict()
+                state_dict.update({"prototypes": prototypes.cpu()})
+
+            torch.save(state_dict, f"{self.dir_checkpoints}/{self.nth_query}_query/best_miou_model.pt")
+            print("best model has been saved (epoch: {:d} | prev. miou: {:.4f} => new miou: {:.4f})."
+                  .format(epoch, self.best_miou, self.running_miou.avg))
+            self.best_miou = self.running_miou.avg
+
+        write_log(log, list_entities=[epoch, self.running_miou.avg, self.running_pixel_acc.avg])
         print('\n' + '=' * 100)
         print("Experim name:", self.experim_name)
         print("Epoch {:d} | miou: {:.3f} | pixel_acc.: {:.3f}".format(epoch,
@@ -313,7 +324,6 @@ class Model:
                                                                       self.running_pixel_acc.avg))
         print('=' * 100 + '\n')
 
-        write_log(log, list_entities=[epoch, self.running_miou.avg, self.running_pixel_acc.avg])
         self._reset_meters()
 
         confidence = self._query(prob, 'least_confidence')  # prob.max(dim=1)[0]
@@ -329,47 +339,6 @@ class Model:
 
         self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_val.png")
         return
-
-    def _select_queries(self):
-        print(f"\n({self.experim_name}) selecting queries...")
-        self.model.eval()
-
-        dataloader_iter = iter(self.dataloader_query)
-        tbar = tqdm(range(len(self.dataloader_query)))
-
-        list_quries = list()
-        with torch.no_grad():
-            for batch_ind in tbar:
-                dict_data = next(dataloader_iter)
-                x = dict_data['x'].to(self.device)
-
-                dict_outputs = self.model(x)
-
-                if self.use_softmax:
-                    prob = dict_outputs["pred"]
-
-                else:
-                    emb = dict_outputs['emb']  # b x n_emb_dims x h x w
-                    _, dist = prediction(emb.detach(), self.prototypes.detach(), return_distance=True)
-                    prob = F.softmax(-dist, dim=1)
-
-                list_quries.append(self._query(prob, self.query_strategy).cpu())
-
-        queries = torch.cat(list_quries, dim=0)  # b x h x w
-        b, h, w = queries.shape
-        queries = queries.view(b, h * w)  # b x (h * w)
-        grid = torch.zeros_like(queries)  # b x (h * w)
-
-        ind_best_queries = torch.topk(queries,
-                                      k=self.n_pixels_per_query,
-                                      dim=1,
-                                      largest=self.query_strategy == "entropy").indices  # b x k
-
-        for i in range(b):
-            for j in range(self.n_pixels_per_query):
-                grid[i, ind_best_queries[i, j]] = 1
-        grid = grid.view(b, h, w)
-        return grid.numpy().astype(np.bool)
 
     @staticmethod
     def _query(prob, query_strategy):

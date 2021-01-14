@@ -12,16 +12,24 @@ class Arguments:
         parser.add_argument("--seed", "-s", type=int, default=0)
         parser.add_argument("--model_name", type=str, default="gcpl_seg", choices=["gcpl_seg", "mp_seg"])
         parser.add_argument("--n_pixels_per_img", type=int, default=0)
+        parser.add_argument("--network_name", type=str, default="deeplab", choices=["deeplab", "FPN"])
         parser.add_argument("--use_aug", action='store_true', default=False)
         parser.add_argument("--use_softmax", action='store_true', default=False)
-        parser.add_argument("--suffix", type=str, default=None)
+        parser.add_argument("--suffix", type=str, default='')
 
         # active learning
         parser.add_argument("--active_learning", action="store_true", default=False)
         parser.add_argument("--n_pixels_per_query", type=int, default=10, help="# pixels for labelling")
         parser.add_argument("--n_epochs_query", type=int, default=20, help="interval between queries in epoch")
+
         parser.add_argument("--max_budget", type=int, default=100, help="maximum budget in pixels per image")
         parser.add_argument("--query_strategy", type=str, default="least_confidence", choices=["least_confidence", "margin_sampling", "entropy", "random"])
+
+        # QBC
+        parser.add_argument("--use_mc_dropout", action="store_true", default=False)
+        parser.add_argument("--mc_dropout_p", type=float, default=0.2)
+        parser.add_argument("--mc_n_steps", type=int, default=20)
+        parser.add_argument("--vote_type", type=str, default="hard", choices=["soft", "hard"])
 
         # system
         parser.add_argument("--gpu_ids", type=str, nargs='+', default='0')
@@ -54,6 +62,7 @@ class Arguments:
         parser.add_argument("--weight_type", type=str, default="supervised",
                             choices=["random", "supervised", "moco_v2", "swav", "deepcluster_v2"])
         parser.add_argument("--use_dilated_resnet", type=bool, default=True, help="whether to use dilated resnet")
+
         self.parser = parser
 
     def parse_args(self):
@@ -61,7 +70,7 @@ class Arguments:
 
         args.stride_total = 8 if args.use_dilated_resnet else 32
         if args.dataset_name == "cv":
-            args.batch_size = 3
+            args.batch_size = 4
             args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/camvid"
             args.ignore_index = 11
             args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
@@ -131,6 +140,8 @@ class Arguments:
         list_keywords.append(args.dataset_name)
         list_keywords.append("aug") if args.use_aug else "None"
 
+        list_keywords.append(args.network_name)
+
         if args.use_softmax:
             list_keywords.append("sm")
 
@@ -167,14 +178,19 @@ class Arguments:
                 list_keywords.append(str(args.w_repl))
 
         # query strategy
-        list_keywords.append(f"{args.query_strategy}")
+        list_keywords.append(f"{args.query_strategy}") if args.n_pixels_per_img != 0 else None
+        list_keywords.append("vote") if args.use_mc_dropout else None
         list_keywords.append(f"n_pixels_{args.n_pixels_per_img}")
         list_keywords.append("img_inp") if args.use_img_inp else None
 
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None
         list_keywords.append("debug") if args.debug else None
-        args.experim_name = '_'.join(list_keywords)
+
+        try:
+            args.experim_name = '_'.join(list_keywords)
+        except TypeError:
+            raise TypeError(list_keywords)
 
         # create dirs
         args.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"

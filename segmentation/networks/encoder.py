@@ -3,6 +3,7 @@ from networks.backbones.resnet_backbone import ResNetBackbone
 
 resnet50 = {
     "supervised": "../networks/backbones/pretrained/resnet50-pytorch.pth",
+    # "supervised": "/home/gishin-temp/projects/open_set/segmentation/networks/backbones/pretrained/resnet50-pytorch.pth",
     "deepcluster_v2": "../networks/backbones/pretrained/deepclusterv2_400ep_pretrain.pth.tar",
     "moco_v2": "../networks/backbones/pretrained/moco_v2_800ep_pretrain.pth.tar",
     "swav": "../networks/backbones/pretrained/swav_800ep_pretrain.pth.tar"
@@ -53,3 +54,4 @@ class Encoder(nn.Module):
 
         else:
             return self.base.parameters()
+

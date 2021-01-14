@@ -1,6 +1,6 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from torch import nn
 
 
 class FPNDecoder(nn.Module):
@@ -84,23 +84,7 @@ class FPNDecoder(nn.Module):
     @staticmethod
     def _init(m):
         if isinstance(m, nn.Conv2d):
-           torch.nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
-
-        # if isinstance(m, nn.Conv2d):
-        #     kernel_size = torch.tensor(m.weight.shape)
-        #     scale = torch.sqrt(6. / (torch.prod(kernel_size[1:]) + torch.prod(kernel_size[2:]) * kernel_size[-1]))
-        #     torch.nn.init.uniform_(m.weight, -scale, scale)
-        #     nn.init.constant_(m.bias, 0)
-        #
-        # elif isinstance(m, nn.Linear):
-        #     kernel_size = torch.tensor(m.weight.shape)
-        #     scale = torch.sqrt(6. / (kernel_size.sum()))
-        #     torch.nn.init.uniform_(m.weight, -scale, scale)
-        #     nn.init.constant_(m.bias, 0)
-        #
-        # elif isinstance(m, nn.BatchNorm2d):
-        #     nn.init.constant_(m.weight, 1)
-        #     nn.init.constant_(m.bias, 0)
+            torch.nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
 
 
 class UpsampleBlock(nn.Module):
@@ -116,3 +100,49 @@ class UpsampleBlock(nn.Module):
 
     def forward(self, x):
         return F.interpolate(self.block(x), scale_factor=self.scale_factor, mode="bilinear")
+
+
+class SegmentHead(nn.Module):
+    def __init__(self, args):
+        super(SegmentHead, self).__init__()
+        self.segment_head = nn.Sequential(nn.Conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
+                                          nn.BatchNorm2d(256),  # 304=256+48
+                                          nn.ReLU(),
+                                          nn.Dropout(0.5),  # decoder dropout 1
+                                          nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+                                          nn.BatchNorm2d(256),
+                                          nn.ReLU(),
+                                          nn.Dropout(args.mc_dropout_p))  # , constants.MC_DROPOUT_RATE),  # MC dropout
+                                          # nn.Conv2d(256, args.n_classes, kernel_size=1, stride=1))
+
+        if args.use_softmax:
+            self.classifier = nn.Conv2d(256, args.n_classes, 1)
+
+        else:
+            self.fc = nn.Conv2d(256, args.n_emb_dims, 1)
+
+        if args.use_img_inp:
+            self.fc_img_inp = nn.Conv2d(256, 3, 1)
+
+        self._init_weight()
+
+        self.n_classes = args.n_classes
+        self.use_softmax = args.use_softmax
+
+    def forward(self, x):
+        emb = self.segment_head(x)
+        if self.use_softmax:
+            pred = self.classifier(emb)
+            return {'pred': pred}
+        else:
+            emb = self.fc(emb)
+            return {'emb': emb}
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                torch.nn.init.kaiming_normal_(m.weight)
+
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()

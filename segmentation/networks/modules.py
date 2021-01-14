@@ -56,6 +56,7 @@ def init_prototypes(n_classes, n_emb_dims,
                 for label in unique_labels_batch:
                     ind_label = (y_flatten == label)  # (b * h * w)
                     emb_label = emb_flatten[ind_label]  # m x n_emb_dims
+
                     prototypes[label] += emb_label.sum(dim=0, keepdim=True).detach()
                     dict_label_counts[label] = dict_label_counts[label] + emb_label.shape[0]
 

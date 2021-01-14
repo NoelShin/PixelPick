@@ -72,13 +72,30 @@ def get_optimizer(args, model, prototypes=None):
     optimizer_params = args.optimizer_params
     if args.dataset_name == "cv":
         from torch.optim import Adam
-        list_params = [{'params': model.encoder.parameters(),
-                        'lr': optimizer_params['lr'] / 10,
-                        'weight_decay': optimizer_params['weight_decay']}]
+        if args.network_name == "FPN":
+            list_params = [{'params': model.encoder.parameters(),
+                            'lr': optimizer_params['lr'] / 10,
+                            'weight_decay': optimizer_params['weight_decay']}]
 
-        list_params += [{'params': model.decoder.parameters(),
-                         'lr': optimizer_params['lr'],
-                         'weight_decay': optimizer_params['weight_decay']}]
+            list_params += [{'params': model.decoder.parameters(),
+                             'lr': optimizer_params['lr'],
+                             'weight_decay': optimizer_params['weight_decay']}]
+        else:
+            list_params = [{'params': model.backbone.parameters(),
+                            'lr': optimizer_params['lr'] / 10,
+                            'weight_decay': optimizer_params['weight_decay']}]
+
+            list_params += [{'params': model.aspp.parameters(),
+                             'lr': optimizer_params['lr'],
+                             'weight_decay': optimizer_params['weight_decay']}]
+
+            list_params += [{'params': model.low_level_conv.parameters(),
+                             'lr': optimizer_params['lr'],
+                             'weight_decay': optimizer_params['weight_decay']}]
+
+            list_params += [{'params': model.seg_head.parameters(),
+                             'lr': optimizer_params['lr'],
+                             'weight_decay': optimizer_params['weight_decay']}]
 
         if prototypes is not None:
             list_params += [{'params': prototypes,
