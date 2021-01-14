@@ -99,9 +99,8 @@ def get_optimizer(args, model, prototypes=None):
 
         if prototypes is not None:
             list_params += [{'params': prototypes,
-                             'lr': 0.1,
-                             'betas': (0.9, 0.999),
-                             'weight_decay': optimizer_params['weight_decay']}] if args.model_name == "gcpl_seg" else []
+                             'lr': 0.001,
+                             'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
         optimizer = Adam(list_params)
 
     elif args.dataset_name == "voc":
@@ -391,9 +390,15 @@ class Visualiser:
 
         list_imgs.append(self._preprocess(dict_tensors['input'], seg=False))
         try:
+            list_imgs.append(self._preprocess(dict_tensors['img_inp_target'], seg=False))
+        except KeyError:
+            pass
+
+        try:
             list_imgs.append(self._preprocess(dict_tensors['img_inp_output'], seg=False))
         except KeyError:
             pass
+
         list_imgs.append(self._preprocess(dict_tensors['target'], seg=True))
         list_imgs.append(self._preprocess(dict_tensors['pred'], seg=True))
         list_imgs.append(self._preprocess(dict_tensors['confidence'], seg=False))
