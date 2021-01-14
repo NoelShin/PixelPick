@@ -11,6 +11,8 @@ from torchvision.transforms import ColorJitter, RandomApply, RandomGrayscale
 import torchvision.transforms.functional as TF
 from tqdm import tqdm
 
+from utils.ced import CED
+
 
 class CamVidDataset(Dataset):
     def __init__(self, args, val=False, query=False):
@@ -75,7 +77,11 @@ class CamVidDataset(Dataset):
                 print("# labelled pixels used for training:", arr_masks.astype(np.int32).sum())
                 self.arr_masks = arr_masks
 
+        self.use_ced = args.use_ced
         self.use_img_inp = args.use_img_inp
+
+        self.use_visual_acuity = args.use_visual_acuity
+
         self.val = val
         self.query = query
 
@@ -85,7 +91,7 @@ class CamVidDataset(Dataset):
         self.arr_masks = np.maximum(self.arr_masks, queries)
         print("# labelled pixels is changed from {} to {}".format(previous, self.arr_masks.sum()))
 
-    def _geometric_augmentations(self, x, y, edge=None, merged_mask=None):
+    def _geometric_augmentations(self, x, y, edge=None, merged_mask=None, x_blurred=None):
         if self.geometric_augmentations["random_scale"]:
             w, h = x.size
             rs = uniform(0.5, 2.0)
@@ -99,6 +105,9 @@ class CamVidDataset(Dataset):
 
             if merged_mask is not None:
                 merged_mask = TF.resize(merged_mask, (h_resized, w_resized), Image.NEAREST)
+
+            if x_blurred is not None:
+                x_blurred = TF.resize(x_blurred, (h_resized, w_resized), Image.BILINEAR)
 
         if self.geometric_augmentations["crop"]:
             w, h = x.size
@@ -114,6 +123,9 @@ class CamVidDataset(Dataset):
             if merged_mask is not None:
                 merged_mask = TF.pad(merged_mask, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
 
+            if x_blurred is not None:
+                x_blurred = TF.pad(x_blurred, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
+
             w, h = x.size
             start_h = randint(0, h - self.crop_size[0])
             start_w = randint(0, w - self.crop_size[1])
@@ -126,6 +138,9 @@ class CamVidDataset(Dataset):
             if merged_mask is not None:
                 merged_mask = TF.crop(merged_mask, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
 
+            if x_blurred is not None:
+                x_blurred = TF.crop(x_blurred, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
+
         if self.geometric_augmentations["random_hflip"]:
             if random() > 0.5:
                 x, y = TF.hflip(x), TF.hflip(y)
@@ -135,6 +150,9 @@ class CamVidDataset(Dataset):
 
                 if merged_mask is not None:
                     merged_mask = TF.hflip(merged_mask)
+
+                if x_blurred is not None:
+                    x_blurred = TF.hflip(x_blurred)
 
         if edge is not None:
             edge = torch.from_numpy(np.asarray(edge, dtype=np.uint8) // 255)
@@ -146,21 +164,45 @@ class CamVidDataset(Dataset):
         else:
             merged_mask = torch.tensor(0)
 
-        return x, y, edge, merged_mask
+        return x, y, edge, merged_mask, x_blurred
 
-    def _photometric_augmentations(self, x):
+    def _photometric_augmentations(self, x, x_blurred=None):
         if self.photometric_augmentations["random_color_jitter"]:
             color_jitter = ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8, hue=0.2)
             x = RandomApply([color_jitter], p=0.8)(x)
 
+            if x_blurred is not None:
+                x_blurred = RandomApply([color_jitter], p=0.8)(x_blurred)
+
         if self.photometric_augmentations["random_grayscale"]:
             x = RandomGrayscale(0.2)(x)
+
+            if x_blurred is not None:
+                x_blurred = RandomGrayscale(0.2)(x_blurred)
 
         if self.photometric_augmentations["random_gaussian_blur"]:
             w, h = x.size
             smaller_length = min(w, h)
             x = GaussianBlur(kernel_size=int((0.1 * smaller_length // 2 * 2) + 1))(x)
         return x
+
+    def _gaussian_blur(self, img, min_val=0.1, max_val=2.0):
+        w, h = img.size
+        smaller_length = min(w, h)
+        kernel_size = int((0.1 * smaller_length // 2 * 2) + 1)
+
+        np_array = np.array(img)
+        sigma = (max_val - min_val) * np.random.random_sample() + min_val
+
+        np_array = cv2.GaussianBlur(np_array, (kernel_size, kernel_size), sigma)
+        return Image.fromarray(np_array)
+
+    def _ced_mask(self, img):
+        from random import randint
+        lower_thres = randint(0, 100)
+        dilation = 1  # randint(1, 2)
+        ced = CED(dilation, lower_thres, lower_thres * 2)(img)
+        return ced
 
     def _sample_region_masks(self, h_img, w_img, divider, n_patches):
         from random import choice, choices
@@ -207,18 +249,27 @@ class CamVidDataset(Dataset):
             else:
                 mask = None
 
+            if self.use_visual_acuity:
+                x_clean = x
+            else:
+                x_clean = None
+
             if self.use_img_inp:
-                w, h = x.size
-                merged_mask, list_region_masks_params = self._sample_region_masks(h, w, divider=8, n_patches=8)
+                if self.use_ced:
+                    merged_mask = self._ced_mask(x)
+                else:
+                    w, h = x.size
+                    merged_mask, list_region_masks_params = self._sample_region_masks(h, w, divider=8, n_patches=8)
+
             else:
                 merged_mask = None
 
-            x, y, mask, merged_mask = self._geometric_augmentations(x, y, mask, merged_mask)
+            x, y, mask, merged_mask, x_clean = self._geometric_augmentations(x, y, mask, merged_mask, x_clean)
             x = self._photometric_augmentations(x)
 
             if self.geometric_augmentations["random_scale"]:
                 dict_data.update({"pad_size": self.pad_size})
-            dict_data.update({'mask': mask, 'merged_mask': merged_mask})
+            dict_data.update({'mask': mask, 'merged_mask': merged_mask, "x_clean": TF.to_tensor(x_clean)})
 
         dict_data.update({'x': TF.to_tensor(x), 'y': torch.tensor(np.asarray(y, np.int64), dtype=torch.long)})
         return dict_data

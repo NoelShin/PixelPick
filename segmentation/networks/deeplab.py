@@ -44,6 +44,8 @@ class DeepLab(nn.Module):
         self.return_features = False
         self.return_attention = False
 
+        self.use_img_inp = args.use_img_inp
+        self.use_visual_acuity = args.use_visual_acuity
         self.use_softmax = args.use_softmax
 
     def forward(self, inputs):
@@ -73,6 +75,11 @@ class DeepLab(nn.Module):
             else:
                 return pred, mask
         else:
+            if self.use_img_inp or self.use_visual_acuity:
+                img_inp = dict_outputs["img_inp"]
+                img_inp = F.interpolate(img_inp, size=inputs.size()[2:], mode='bilinear', align_corners=True)
+                dict_outputs['img_inp'] = img_inp
+
             if self.use_softmax:
                 pred = dict_outputs['pred']
                 pred = F.interpolate(pred, size=inputs.size()[2:], mode='bilinear', align_corners=True)

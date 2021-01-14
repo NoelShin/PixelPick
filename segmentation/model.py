@@ -40,7 +40,7 @@ class Model:
         self.use_softmax = args.use_softmax
         self.use_img_inp = args.use_img_inp
 
-        self.device = torch.device("cuda:{:s}".format(args.gpu_ids) if torch.cuda.is_available() else "cpu:0")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu:0")
         self.dataloader = get_dataloader(args, val=False, query=False,
                                          shuffle=True, batch_size=args.batch_size, n_workers=args.n_workers)
         self.dataloader_query = get_dataloader(args, val=False, query=True,
@@ -52,16 +52,7 @@ class Model:
         else:
             self.model = DeepLab(args).to(self.device)
 
-        # self.prototypes = init_prototypes(args.n_classes, args.n_emb_dims, args.n_prototypes,
-        #                                   mode='mean',
-        #                                   model=self.model,
-        #                                   dataset=self.dataloader.dataset,
-        #                                   ignore_index=args.ignore_index,
-        #                                   learnable=args.model_name == "gcpl_seg",
-        #                                   device=self.device) if not self.use_softmax else None
         self.criterion = get_criterion(args, self.device)
-        # self.optimizer = get_optimizer(args, self.model, prototypes=self.prototypes)
-        # self.lr_scheduler = get_lr_scheduler(args, optimizer=self.optimizer, iters_per_epoch=len(self.dataloader))
         self.vis = Visualiser(args.dataset_name)
         self.query_strategy = args.query_strategy
 
@@ -78,6 +69,9 @@ class Model:
         self.network_name = args.network_name
         self.n_emb_dims = args.n_emb_dims
         self.n_prototypes = args.n_prototypes
+
+        self.use_visual_acuity = args.use_visual_acuity
+        self.w_visual_acuity = args.w_visual_acuity
 
     def __call__(self):
         for nth_query in range(self.max_budget // self.n_pixels_per_query + 1):
@@ -119,6 +113,10 @@ class Model:
         for batch_ind in tbar:
             dict_data = next(dataloader_iter)
             x, y = dict_data['x'].to(self.device), dict_data['y'].to(self.device)
+
+            if self.use_visual_acuity:
+                img_inp_target = dict_data['x_clean'].to(self.device)
+
             if self.n_pixels_per_img != 0:
                 mask = dict_data['mask'].to(self.device, torch.bool)
                 y.flatten()[~mask.flatten()] = self.ignore_index
@@ -164,6 +162,10 @@ class Model:
                 # img_inp_output = img_inp_output.flatten()[merged_mask.flatten()]
                 dict_losses.update({"img_inp": self.w_img_inp * F.mse_loss(img_inp_output, img_inp_target)})
 
+            elif self.use_visual_acuity:
+                corrected_input = dict_outputs["img_inp"]
+                dict_losses.update({"visual_acuity": 10 * F.mse_loss(corrected_input, img_inp_target)})
+
             loss = torch.tensor(0, dtype=torch.float32).to(self.device)
 
             fmt = "({:s}) Epoch {:d} | mIoU.: {:.3f} | pixel acc.: {:.3f} | Loss: {:.3f}"
@@ -200,21 +202,22 @@ class Model:
         write_log(log, list_entities=[epoch, self.running_miou.avg, self.running_pixel_acc.avg, self.running_loss.avg])
         self._reset_meters()
 
-        # confidence = self._query(prob, 'least_confidence')  # prob.max(dim=1)[0]
-        # margin = self._query(prob, 'margin_sampling')
-        # entropy = self._query(prob, 'entropy')
+        confidence = self._query(prob, 'least_confidence')  # prob.max(dim=1)[0]
+        margin = self._query(prob, 'margin_sampling')
+        entropy = self._query(prob, 'entropy')
         #
-        # dict_tensors = {'input': x[0].cpu(),  # dict_data['x'][0].cpu(),
-        #                 'target': dict_data['y'][0].cpu(),
-        #                 'pred': pred[0].detach().cpu(),
-        #                 'confidence': -confidence[0].cpu(),  # minus sign is to draw more uncertain part brighter
-        #                 'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
-        #                 'entropy': entropy[0].cpu()}
-        #
-        # if self.use_img_inp:
-        #     dict_tensors.update({'img_inp_output': dict_outputs["img_inp"][0].detach().cpu()})
-        #
-        # self.vis(dict_tensors, fp=fp)
+        dict_tensors = {'input': x[0].cpu(),  # dict_data['x'][0].cpu(),
+                        'target': dict_data['y'][0].cpu(),
+                        'pred': pred[0].detach().cpu(),
+                        'confidence': -confidence[0].cpu(),  # minus sign is to draw more uncertain part brighter
+                        'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
+                        'entropy': entropy[0].cpu()}
+
+        if self.use_img_inp or self.use_visual_acuity:
+            dict_tensors.update({'img_inp_target': img_inp_target[0].cpu()})
+            dict_tensors.update({'img_inp_output': dict_outputs["img_inp"][0].detach().cpu()})
+
+        self.vis(dict_tensors, fp=fp)
         return model, optimizer, prototypes
 
     def _train(self):

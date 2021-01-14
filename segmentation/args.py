@@ -41,8 +41,13 @@ class Arguments:
         parser.add_argument("--use_augmented_dataset", action="store_true", default=False, help="whether to use the augmented dataset for pascal voc")
 
         # image inpainting loss
+        parser.add_argument("--use_ced", action="store_true", default=False, help="Canny edge detector")
         parser.add_argument("--use_img_inp", action="store_true", default=False, help="image inpainting loss")
         parser.add_argument("--w_img_inp", type=float, default=1, help="weight for image inpainting loss")
+
+        # visual acuity loss
+        parser.add_argument("--use_visual_acuity", action="store_true", default=False, help="Canny edge detector")
+        parser.add_argument("--w_visual_acuity", type=float, default=1, help="weight for image inpainting loss")
 
         # gcpl
         parser.add_argument("--ignore_bg", action="store_true", default=False, help="ignore_bg of voc datasets")
@@ -96,7 +101,7 @@ class Arguments:
                 "photometric": {
                     "random_color_jitter": args.use_aug,
                     "random_grayscale": args.use_aug,
-                    "random_gaussian_blur": args.use_aug
+                    "random_gaussian_blur": False  # args.use_aug
                 }
             }
 
