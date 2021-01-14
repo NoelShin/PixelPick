@@ -48,6 +48,11 @@ class DeepLab(nn.Module):
         self.use_visual_acuity = args.use_visual_acuity
         self.use_softmax = args.use_softmax
 
+    def turn_on_dropout(self):
+        for m in self.modules():
+            if isinstance(m, torch.nn.Dropout):
+                m.train()
+
     def forward(self, inputs):
         dict_outputs = dict()
 

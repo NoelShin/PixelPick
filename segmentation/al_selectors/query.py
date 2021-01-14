@@ -43,6 +43,8 @@ class QuerySelector:
         if not self.use_softmax:
             prototypes = state_dict["prototypes"].to(self.device)
         model.eval()
+        if self.use_mc_dropout:
+            model.turn_on_dropout()
 
         arr_masks = self.dataloader.dataset.arr_masks
 
