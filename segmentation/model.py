@@ -40,7 +40,7 @@ class Model:
         self.use_softmax = args.use_softmax
         self.use_img_inp = args.use_img_inp
 
-        self.device = torch.device("cuda:{:s}".format(args.gpu_ids) if torch.cuda.is_available() else "cpu:0")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu:0")
         self.dataloader = get_dataloader(args, val=False, query=False,
                                          shuffle=True, batch_size=args.batch_size, n_workers=args.n_workers)
         self.dataloader_query = get_dataloader(args, val=False, query=True,
@@ -94,8 +94,8 @@ class Model:
             # draw histograms
             ClassHistogram(self.args, nth_query).draw_hist() #dst=f"{self.dir_checkpoints}/{nth_query}_query")
 
-            # zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query")
-            # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query")
+            zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query")
+            send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query")
             if nth_query == (self.max_budget // self.n_pixels_per_query) or self.n_pixels_per_img == 0:
                 break
 
