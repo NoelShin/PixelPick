@@ -143,7 +143,7 @@ class QuerySelector:
         selected_queries = np.array(list_quries).astype(np.bool)
 
         # Update labels for query dataloader. Note that this does not update labels for training dataloader.
-        self.dataloader.dataset.label_queries(selected_queries)
+        self.dataloader.dataset.label_queries(selected_queries, nth_query + 1)
 
         # remove model file to save memory
         os.remove(f"{self.dir_checkpoints}/{nth_query}_query/best_miou_model.pt")
