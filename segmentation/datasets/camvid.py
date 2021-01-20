@@ -19,6 +19,7 @@ class CamVidDataset(Dataset):
         super(CamVidDataset, self).__init__()
         self.args = args
         assert os.path.isdir(args.dir_dataset), f"{args.dir_dataset} does not exist."
+        self.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
         self.seed = args.seed
 
         mode = "test" if val else "train"
@@ -85,10 +86,16 @@ class CamVidDataset(Dataset):
         self.val = val
         self.query = query
 
-    def label_queries(self, queries):
+    def label_queries(self, queries, nth_query):
         assert len(queries) == len(self.arr_masks), f"{queries.shape}, {self.arr_masks.shape}"
         previous = self.arr_masks.sum()
         self.arr_masks = np.maximum(self.arr_masks, queries)
+        try:
+            np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
+        except FileNotFoundError:
+            os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
+            np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
+
         print("# labelled pixels is changed from {} to {}".format(previous, self.arr_masks.sum()))
 
     def _geometric_augmentations(self, x, y, edge=None, merged_mask=None, x_blurred=None):
@@ -197,7 +204,8 @@ class CamVidDataset(Dataset):
         np_array = cv2.GaussianBlur(np_array, (kernel_size, kernel_size), sigma)
         return Image.fromarray(np_array)
 
-    def _ced_mask(self, img):
+    @staticmethod
+    def _ced_mask(img):
         from random import randint
         lower_thres = randint(0, 100)
         dilation = 1  # randint(1, 2)

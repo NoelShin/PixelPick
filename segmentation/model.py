@@ -86,7 +86,7 @@ class Model:
             self._train()
 
             # draw histograms
-            ClassHistogram(self.args, nth_query).draw_hist() #dst=f"{self.dir_checkpoints}/{nth_query}_query")
+            ClassHistogram(self.args, nth_query).draw_hist()  # dst=f"{self.dir_checkpoints}/{nth_query}_query")
 
             # zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query")
             # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query")
@@ -95,7 +95,7 @@ class Model:
 
             # select queries using the current model and label them.
             queries = self.query_selector(nth_query)
-            self.dataloader.dataset.label_queries(queries)
+            self.dataloader.dataset.label_queries(queries, nth_query + 1)
         return
 
     def _train_epoch(self, epoch, model, optimizer, prototypes=None):
