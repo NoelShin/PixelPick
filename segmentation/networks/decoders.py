@@ -141,7 +141,7 @@ class SegmentHead(nn.Module):
 
         if self.use_softmax:
             pred = self.classifier(emb)
-            dict_outputs.update({"pred": pred})
+            dict_outputs.update({"emb": emb, "pred": pred})
 
         else:
             emb = self.fc(emb)
