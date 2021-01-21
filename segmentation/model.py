@@ -205,7 +205,7 @@ class Model:
         confidence = self._query(prob, 'least_confidence')  # prob.max(dim=1)[0]
         margin = self._query(prob, 'margin_sampling')
         entropy = self._query(prob, 'entropy')
-        #
+
         dict_tensors = {'input': x[0].cpu(),  # dict_data['x'][0].cpu(),
                         'target': dict_data['y'][0].cpu(),
                         'pred': pred[0].detach().cpu(),
@@ -336,7 +336,7 @@ class Model:
         dict_tensors = {'input': dict_data['x'][0].cpu(),
                         'target': dict_data['y'][0].cpu(),
                         'pred': pred[0].detach().cpu(),
-                        'confidence': -confidence[0].cpu(),  # minus sign is to draw more uncertain part brighter
+                        'confidence': 1.0 - confidence[0].cpu(),  # minus sign is to draw more uncertain part brighter
                         'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
                         'entropy': entropy[0].cpu()}
 

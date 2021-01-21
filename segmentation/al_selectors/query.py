@@ -7,7 +7,6 @@ from tqdm import tqdm
 
 from networks.model import FPNSeg
 from networks.deeplab import DeepLab
-from networks.modules import init_prototypes
 from utils.metrics import prediction, eval_metrics
 
 
@@ -56,6 +55,9 @@ class QuerySelector:
             for batch_ind in tbar:
                 dict_data = next(dataloader_iter)
                 x = dict_data['x'].to(self.device)
+                y = dict_data['y']  # 1 x 360 x 480
+                mask_void_pixels = (y == 11).squeeze(dim=0).numpy()  # 360 x 480
+
                 h, w = x.shape[2:]
 
                 selected_queries_per_img = torch.zeros((h * w)).to(self.device)
@@ -83,7 +85,10 @@ class QuerySelector:
                         uncertainty_map = self.uncertainty_sampler(prob).squeeze(dim=0)  # h x w
 
                         # exclude pixels that are already annotated.
-                        uncertainty_map[arr_masks[batch_ind]] = 0.0 if self.query_strategy == "entropy" else 1.0
+                        uncertainty_map[arr_masks[batch_ind]] = 0.0 if self.query_strategy in ["entropy", "least_confidence"] else 1.0
+
+                        # exclude pixels that belong to void category.
+                        uncertainty_map[mask_void_pixels] = 0.0 if self.query_strategy in ["entropy", "least_confidence"] else 1.0
 
                         if self.vote_type == "hard":
                             # h, w = uncertainty_map.shape
@@ -127,14 +132,17 @@ class QuerySelector:
                     uncertainty_map = self.uncertainty_sampler(prob).squeeze(dim=0)  # h x w
 
                     # exclude pixels that are already annotated.
-                    uncertainty_map[arr_masks[batch_ind]] = 0.0 if self.query_strategy == "entropy" else 1.0
+                    uncertainty_map[arr_masks[batch_ind]] = 0.0 if self.query_strategy in ["entropy", "least_confidence"] else 1.0
+
+                    # exclude pixels that belong to void category.
+                    uncertainty_map[mask_void_pixels] = 0.0 if self.query_strategy in ["entropy", "least_confidence"] else 1.0
 
                     # get top k pixels
                     uncertainty_map = uncertainty_map.view(-1)
                     ind_best_queries = torch.topk(uncertainty_map,
                                                   k=self.n_pixels_per_query,
                                                   dim=0,
-                                                  largest=self.query_strategy == "entropy").indices  # k
+                                                  largest=self.query_strategy in ["entropy", "least_confidence"]).indices  # k
                 for ind in ind_best_queries:
                     selected_queries_per_img[ind] += 1
 
@@ -158,7 +166,7 @@ class UncertaintySampler:
         return (-prob * torch.log(prob)).sum(dim=1)  # b x h x w
 
     def _least_confidence(self, prob):
-        return prob.max(dim=1)[0]  # b x h x w
+        return 1.0 - prob.max(dim=1)[0]  # b x h x w
 
     def _margin_sampling(self, prob):
         top2 = prob.topk(k=2, dim=1).values  # b x k x h x w

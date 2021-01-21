@@ -1,5 +1,5 @@
 #!/home/gishin-temp/bin/sh
-python3 ../main_al.py --n_pixels_per_img 10 --seed 0  --suffix '' --use_aug --use_softmax --query_strategy 'entropy' --debug
+python3 ../main_al.py --n_pixels_per_img 10 --seed 0  --suffix '' --use_aug --use_softmax --query_strategy 'least_confidence'
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 1  --suffix '' --use_aug --use_softmax --query_strategy 'entropy' --use_mc_dropout
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 2  --suffix '' --use_aug --use_softmax --query_strategy 'entropy' --use_mc_dropout
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 3  --suffix '' --use_aug --use_softmax --query_strategy 'entropy' --use_mc_dropout

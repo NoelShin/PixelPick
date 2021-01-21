@@ -58,17 +58,28 @@ class CamVidDataset(Dataset):
                 w, h = label.size
                 n_pixels_per_img = h * w if args.n_pixels_per_img == 0 else args.n_pixels_per_img
 
-                for _ in tqdm(range(len(self.list_labels))):
+                for i in tqdm(range(len(self.list_labels))):
+                    label = np.array(Image.open(self.list_labels[i]))  # H x W
+                    ind_non_void_pixels = np.where(label.flatten() != self.ignore_index)[0]
+                    ind_chosen_pixels = np.random.choice(ind_non_void_pixels, n_pixels_per_img, replace=False)
+
                     mask = np.zeros((h, w), dtype=np.bool)
                     mask_flat = mask.flatten()
-
-                    # pseudo-random numbers
-                    ind_chosen_pixels = np.random.choice(range(len(mask_flat)), n_pixels_per_img, replace=False)
-
                     mask_flat[ind_chosen_pixels] += True
-
                     mask = mask_flat.reshape((h, w))
                     list_masks.append(mask)
+
+                    # void_pixels = (label == self.ignore_index).flatten()  # H * W
+                    #
+                    # mask = np.zeros((h, w), dtype=np.bool)
+                    # mask_flat = mask.flatten()
+                    # mask_flat_non_void = mask[~void_pixels]
+                    #
+                    # ind_chosen_pixels = np.random.choice(range(len(mask_flat)), n_pixels_per_img, replace=False)
+                    #
+                    # mask_flat[ind_chosen_pixels] += True
+                    # mask = mask_flat.reshape((h, w))
+                    # list_masks.append(mask)
 
                 arr_masks = np.array(list_masks, dtype=np.bool)
 
