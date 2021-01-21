@@ -24,7 +24,7 @@ class Arguments:
 
         parser.add_argument("--max_budget", type=int, default=100, help="maximum budget in pixels per image")
         parser.add_argument("--query_strategy", type=str, default="least_confidence", choices=["least_confidence", "margin_sampling", "entropy", "random"])
-
+        parser.add_argument("--use_cb_sampling", action="store_true", default=False, help="class balance sampling")
         # QBC
         parser.add_argument("--use_mc_dropout", action="store_true", default=False)
         parser.add_argument("--mc_dropout_p", type=float, default=0.2)
@@ -185,6 +185,7 @@ class Arguments:
         # query strategy
         list_keywords.append(f"{args.query_strategy}") if args.n_pixels_per_img != 0 else None
         list_keywords.append("vote") if args.use_mc_dropout else None
+        list_keywords.append("cb") if args.use_cb_sampling else None
         list_keywords.append(f"n_pixels_{args.n_pixels_per_img}")
         list_keywords.append("img_inp") if args.use_img_inp else None
         list_keywords.append("ced") if args.use_img_inp and args.use_ced else None

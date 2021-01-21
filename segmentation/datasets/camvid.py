@@ -43,15 +43,22 @@ class CamVidDataset(Dataset):
         self.pad_size = (0, 0)
 
         self.arr_masks = None
+        # self.dict_label_counts = {c: 0 for c in range(args.n_classes)}
 
         path_arr_masks = f"{args.dir_dataset}/{mode}/init_labelled_pixels_{self.seed}.npy"
         if args.n_pixels_per_img != 0 and not val:
             if os.path.isfile(path_arr_masks):
                 self.arr_masks = np.load(path_arr_masks)
+                # for i in tqdm(range(len(self.list_labels))):
+                #     label_flat = np.array(Image.open(self.list_labels[i])).flatten()  # h * w
+                #     label_masked_flat = label_flat[self.arr_masks[i].flatten()]
+                #     set_unique_labels = set(label_masked_flat)
+                #     for ul in set_unique_labels:
+                #         self.dict_label_counts[ul] += (label_masked_flat == ul).sum()
 
             else:
                 np.random.seed(self.seed)
-                label = Image.open(self.list_labels[0]).convert("RGB")
+                label = Image.open(self.list_labels[0])  # .convert("RGB")
 
                 list_masks = list()
 
@@ -69,17 +76,11 @@ class CamVidDataset(Dataset):
                     mask = mask_flat.reshape((h, w))
                     list_masks.append(mask)
 
-                    # void_pixels = (label == self.ignore_index).flatten()  # H * W
-                    #
-                    # mask = np.zeros((h, w), dtype=np.bool)
-                    # mask_flat = mask.flatten()
-                    # mask_flat_non_void = mask[~void_pixels]
-                    #
-                    # ind_chosen_pixels = np.random.choice(range(len(mask_flat)), n_pixels_per_img, replace=False)
-                    #
-                    # mask_flat[ind_chosen_pixels] += True
-                    # mask = mask_flat.reshape((h, w))
-                    # list_masks.append(mask)
+                    # label_flat = label.flatten()  # h * w
+                    # label_masked_flat = label_flat[mask_flat]
+                    # set_unique_labels = set(label_masked_flat)
+                    # for ul in set_unique_labels:
+                    #     self.dict_label_counts[ul] += (label_masked_flat == ul).sum()
 
                 arr_masks = np.array(list_masks, dtype=np.bool)
 
@@ -106,7 +107,6 @@ class CamVidDataset(Dataset):
         except FileNotFoundError:
             os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
             np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
-
         print("# labelled pixels is changed from {} to {}".format(previous, self.arr_masks.sum()))
 
     def _geometric_augmentations(self, x, y, edge=None, merged_mask=None, x_blurred=None):
