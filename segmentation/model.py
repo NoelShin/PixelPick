@@ -88,8 +88,8 @@ class Model:
             # draw histograms
             ClassHistogram(self.args, nth_query).draw_hist()  # dst=f"{self.dir_checkpoints}/{nth_query}_query")
 
-            zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query")
-            send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query")
+            zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query", remove_dir=True)
+            send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
             if nth_query == (self.max_budget // self.n_pixels_per_query) or self.n_pixels_per_img == 0:
                 break
 

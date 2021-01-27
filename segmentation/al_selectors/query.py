@@ -304,8 +304,6 @@ class QuerySelector:
         # Update labels for query dataloader. Note that this does not update labels for training dataloader.
         self.dataloader.dataset.label_queries(selected_queries, nth_query + 1)
         # self.dataloader.dataset.dict_label_counts = dict_label_counts
-        print(dict_label_counts)
-        print(np.array(list(dict_label_counts.values())).sum())
 
         # remove model file to save memory
         os.remove(f"{self.dir_checkpoints}/{nth_query}_query/best_miou_model.pt")
