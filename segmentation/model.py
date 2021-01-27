@@ -33,7 +33,7 @@ class Model:
         self.n_classes = args.n_classes
         self.n_epochs = args.n_epochs
         self.n_epochs_query = args.n_epochs_query
-        self.n_pixels_per_img = args.n_pixels_per_img
+        self.n_pixels_per_img = args.n_pixels_by_us + args.n_pixels_by_oracle_cb  # args.n_pixels_per_img
         self.n_pixels_per_query = args.n_pixels_per_query
         self.nth_query = -1
         self.stride_total = args.stride_total
@@ -86,7 +86,7 @@ class Model:
             self._train()
 
             # draw histograms
-            ClassHistogram(self.args, nth_query).draw_hist()  # dst=f"{self.dir_checkpoints}/{nth_query}_query")
+            # ClassHistogram(self.args, nth_query).draw_hist()  # dst=f"{self.dir_checkpoints}/{nth_query}_query")
 
             zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query", remove_dir=True)
             send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
