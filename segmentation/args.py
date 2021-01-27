@@ -19,12 +19,16 @@ class Arguments:
 
         # active learning
         parser.add_argument("--active_learning", action="store_true", default=False)
-        parser.add_argument("--n_pixels_per_query", type=int, default=10, help="# pixels for labelling")
+        parser.add_argument("--n_pixels_per_query", type=int, default=5, help="# pixels for labelling")
+        parser.add_argument("--n_pixels_by_us", type=int, default=10, help="# pixels selected by a uncertainty sampling")
         parser.add_argument("--n_epochs_query", type=int, default=20, help="interval between queries in epoch")
 
         parser.add_argument("--max_budget", type=int, default=100, help="maximum budget in pixels per image")
         parser.add_argument("--query_strategy", type=str, default="least_confidence", choices=["least_confidence", "margin_sampling", "entropy", "random"])
         parser.add_argument("--use_cb_sampling", action="store_true", default=False, help="class balance sampling")
+
+        parser.add_argument("--n_pixels_by_oracle_cb", type=int, default=0)
+
         # QBC
         parser.add_argument("--use_mc_dropout", action="store_true", default=False)
         parser.add_argument("--mc_dropout_p", type=float, default=0.2)
@@ -185,8 +189,9 @@ class Arguments:
         # query strategy
         list_keywords.append(f"{args.query_strategy}") if args.n_pixels_per_img != 0 else None
         list_keywords.append("vote") if args.use_mc_dropout else None
+        list_keywords.append(f"{args.n_pixels_by_us}")
         list_keywords.append("cb") if args.use_cb_sampling else None
-        list_keywords.append(f"n_pixels_{args.n_pixels_per_img}")
+        list_keywords.append("oracle_cb_{}".format(args.n_pixels_by_oracle_cb)) if args.n_pixels_by_oracle_cb > 0 else None
         list_keywords.append("img_inp") if args.use_img_inp else None
 
         list_keywords.append(str(args.seed))
@@ -200,13 +205,5 @@ class Arguments:
 
         # create dirs
         args.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
-        # os.makedirs(f"{args.dir_checkpoints}/train", exist_ok=True)
-        # os.makedirs(f"{args.dir_checkpoints}/val", exist_ok=True)
-        #
-        # # initialise logs
-        # args.log_train = f"{args.dir_checkpoints}/log_train.txt"
-        # args.log_val = f"{args.dir_checkpoints}/log_val.txt"
-        # write_log(args.log_train, header=["epoch", "mIoU", "pixel_acc", "loss"])
-        # write_log(args.log_val, header=["epoch", "mIoU", "pixel_acc"])
         print("model name:", args.experim_name)
         return args

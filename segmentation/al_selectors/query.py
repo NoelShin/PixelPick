@@ -23,7 +23,10 @@ class QuerySelector:
         self.n_classes = args.n_classes
         self.n_emb_dims = args.n_emb_dims
         self.n_prototypes = args.n_prototypes
-        self.n_pixels_per_query = args.n_pixels_per_query
+
+        self.n_pixels_by_oracle_cb = args.n_pixels_by_oracle_cb
+        self.n_pixels_by_us = args.n_pixels_by_us
+
         self.network_name = args.network_name
         self.uncertainty_sampler = UncertaintySampler(args.query_strategy)
         self.use_softmax = args.use_softmax
@@ -48,50 +51,147 @@ class QuerySelector:
 
         arr_masks = self.dataloader.dataset.arr_masks
 
-        # extract histogram info from training dataset
-        if self.use_cb_sampling:
+        # extract label histogram info from training dataset
+        if self.use_cb_sampling or self.n_pixels_by_oracle_cb > 0:
             dict_label_counts = {l: 0 for l in range(self.n_classes)}
+            dict_gt_label_counts = {l: 0 for l in range(self.n_classes)}
 
+            dataloader_iter = iter(self.dataloader)
+            tbar = tqdm(range(len(self.dataloader)))
+            for batch_ind in tbar:
+                dict_data = next(dataloader_iter)
+                y = dict_data['y'].squeeze(dim=0).numpy()
+
+                # information from ground truth labels
+                y_flatten = y.flatten()
+                set_unique_gt_labels = set(y_flatten) - {self.ignore_index}
+                for ul in set_unique_gt_labels:
+                    dict_gt_label_counts[ul] += (y_flatten == ul).sum()
+
+                # information from masked ground truth labels
+                y_masked = y.flatten()[arr_masks[batch_ind].flatten()]
+                set_unique_labels = set(y_masked) - {self.ignore_index}
+
+                for ul in set_unique_labels:
+                    dict_label_counts[ul] += (y_masked == ul).sum()
+
+        list_quries = list()
+
+        if self.n_pixels_by_oracle_cb > 0:
+            assert not self.use_cb_sampling, "args use_cb_sampling and use_oracle_cb are not compatible."
+            print("Choosing pixels by a class balance sampling based on oracle")
+            n_pixels_prev = arr_masks.sum()
+            from copy import deepcopy
+            dict_class_n_pixels = get_n_per_class(deepcopy(dict_label_counts), len(self.dataloader.dataset) * self.n_pixels_by_oracle_cb)
+            for k in list(dict_class_n_pixels.keys()):
+                dict_class_n_pixels[k] -= dict_label_counts[k]
+
+            list_labels = list()
+            dataloader_iter = iter(self.dataloader)
+            tbar = tqdm(range(len(self.dataloader)))
+            for batch_ind in tbar:
+                dict_data = next(dataloader_iter)
+                y = dict_data['y'].squeeze(dim=0).numpy()
+                list_labels.append(y)
+            arr_labels = np.array(list_labels)
+            arr_labels_flat = arr_labels.flatten()
+
+            # exclude pixels that already have a label.
+            arr_labels_flat[arr_masks.flatten()] = self.ignore_index
+
+            n, (h, w) = len(self.dataloader.dataset), y.shape
+            grid = np.zeros((n, h, w), dtype=np.bool)
+            grid_flat = grid.flatten()
+            for l in range(self.n_classes):
+                ind = np.where(arr_labels_flat == l)[0]
+                ind = np.random.choice(ind, dict_class_n_pixels[l], replace=False)
+                grid_flat[ind] = True
+            grid_oracle_cb = grid_flat.reshape((n, h, w))
+            print(f"{grid_oracle_cb.sum()} labelled pixels are selected by an oracle class balance sampling")
+
+            # save this as a new mask
+            # arr_masks = grid
+            # print(f"# labelled pixels changed from {n_pixels_prev} to {arr_masks.sum()}")
+
+        if self.n_pixels_by_us > 0:
+            print("Choosing pixels by a uncertainty sampling")
             dataloader_iter = iter(self.dataloader)
             tbar = tqdm(range(len(self.dataloader)))
             with torch.no_grad():
                 for batch_ind in tbar:
                     dict_data = next(dataloader_iter)
-                    y = dict_data['y'].squeeze(dim=0).numpy()
-                    y_masked = y.flatten()[arr_masks[batch_ind].flatten()]
-                    set_unique_labels = set(y_masked) - {self.ignore_index}
+                    x = dict_data['x'].to(self.device)
+                    y = dict_data['y'].squeeze(dim=0).numpy()   # 360 x 480
+                    mask_void_pixels = (y == 11)  # 360 x 480
 
-                    for ul in set_unique_labels:
-                        dict_label_counts[ul] += (y_masked == ul).sum()
+                    h, w = x.shape[2:]
 
-        dataloader_iter = iter(self.dataloader)
-        tbar = tqdm(range(len(self.dataloader)))
+                    selected_queries_per_img = torch.zeros((h * w)).to(self.device)
 
-        list_quries = list()
-        with torch.no_grad():
-            for batch_ind in tbar:
-                dict_data = next(dataloader_iter)
-                x = dict_data['x'].to(self.device)
-                y = dict_data['y'].squeeze(dim=0).numpy()   # 360 x 480
-                mask_void_pixels = (y == 11)  # 360 x 480
+                    # if using vote uncertainty sampling
+                    if self.use_mc_dropout:
+                        grid = torch.zeros((h, w)).to(self.device)  # (h, w)
 
-                h, w = x.shape[2:]
+                        # repeat for mc_n_steps times - set to 20 as a default
+                        for step in range(self.mc_n_steps):
+                            dict_outputs = model(x)
 
-                selected_queries_per_img = torch.zeros((h * w)).to(self.device)
+                            # get softmax probability
+                            if self.use_softmax:
+                                prob = F.softmax(dict_outputs["pred"], dim=1)
 
-                # if using vote uncertainty sampling
-                if self.use_mc_dropout:
-                    # selected_queries = torch.zeros((h * w)).to(self.device)
-                    # grid = torch.zeros((self.n_classes, x.shape[2], x.shape[3])).to(self.device)
-                    grid = torch.zeros((h, w)).to(self.device)  # (h, w)
+                            else:
+                                emb = dict_outputs['emb']  # b x n_emb_dims x h x w
+                                _, dist = prediction(emb.detach(), prototypes.detach(), return_distance=True)
+                                prob = F.softmax(-dist, dim=1)
 
-                    # repeat for mc_n_steps times - set to 20 as a default
-                    for step in range(self.mc_n_steps):
+                            # get uncertainty map
+                            uncertainty_map = self.uncertainty_sampler(prob).squeeze(dim=0)  # h x w
+
+                            # exclude pixels that are already annotated, belong to the void category, or selected by
+                            # the oracle class balance sampling.
+                            if self.query_strategy in ["entropy", "least_confidence"]:
+                                uncertainty_map[arr_masks[batch_ind]] = 0.0
+                                uncertainty_map[mask_void_pixels] = 0.0
+                                if self.n_pixels_by_oracle_cb > 0:
+                                    uncertainty_map[grid_oracle_cb[batch_ind]] = 0.0
+                            else:
+                                uncertainty_map[arr_masks[batch_ind]] = 1.0
+                                uncertainty_map[mask_void_pixels] = 1.0
+                                if self.n_pixels_by_oracle_cb > 0:
+                                    uncertainty_map[grid_oracle_cb[batch_ind]] = 1.0
+
+                            if self.vote_type == "hard":
+                                uncertainty_map = uncertainty_map.view(-1)  # (h * w)
+
+                                ind_best_queries = torch.topk(uncertainty_map,
+                                                              k=self.n_pixels_by_us,
+                                                              dim=0,
+                                                              largest=self.query_strategy in ["entropy", "least_confidence"]).indices  # k
+
+                                grid = grid.view(-1)  # (h * w)
+                                for ind in ind_best_queries:
+                                    grid[ind] += 1
+                                grid.view(h, w)  # h x w
+
+                            else:
+                                grid += uncertainty_map  # h x w
+
+                            if self.debug:
+                                break
+
+                        grid = grid / self.mc_n_steps  # note that this line is actually not necessary
+                        grid = grid.view(-1)  # (h * w)
+                        ind_best_queries = torch.topk(grid,
+                                                      k=self.n_pixels_by_us,
+                                                      dim=0,
+                                                      largest=True if self.vote_type == "hard" else self.query_strategy in ["entropy", "least_confidence"]).indices  # k
+
+                    else:
                         dict_outputs = model(x)
 
-                        # get softmax probability
                         if self.use_softmax:
-                            prob = F.softmax(dict_outputs["pred"], dim=1)
+                            prob = dict_outputs["pred"]
 
                         else:
                             emb = dict_outputs['emb']  # b x n_emb_dims x h x w
@@ -101,214 +201,105 @@ class QuerySelector:
                         # get uncertainty map
                         uncertainty_map = self.uncertainty_sampler(prob).squeeze(dim=0)  # h x w
 
-                        # exclude pixels that are already annotated.
-                        uncertainty_map[arr_masks[batch_ind]] = 0.0 if self.query_strategy in ["entropy", "least_confidence"] else 1.0
-
-                        # exclude pixels that belong to void category.
-                        uncertainty_map[mask_void_pixels] = 0.0 if self.query_strategy in ["entropy", "least_confidence"] else 1.0
-
-                        if self.vote_type == "hard":
-                            # h, w = uncertainty_map.shape
-                            uncertainty_map = uncertainty_map.view(-1)  # (h * w)
-
-                            ind_best_queries = torch.topk(uncertainty_map,
-                                                          k=self.n_pixels_per_query,
-                                                          dim=0,
-                                                          largest=self.query_strategy in ["entropy", "least_confidence"]).indices  # k
-
-                            grid = grid.view(-1)  # (h * w)
-                            for ind in ind_best_queries:
-                                grid[ind] += 1
-                            grid.view(h, w)  # h x w
-
+                        # exclude pixels that are already annotated or belong to void category.
+                        if self.query_strategy in ["entropy", "least_confidence"]:
+                            uncertainty_map[arr_masks[batch_ind]] = 0.0
+                            uncertainty_map[mask_void_pixels] = 0.0
+                            if self.n_pixels_by_oracle_cb > 0:
+                                uncertainty_map[grid_oracle_cb[batch_ind]] = 0.0
                         else:
-                            grid += uncertainty_map  # h x w
+                            uncertainty_map[arr_masks[batch_ind]] = 1.0
+                            uncertainty_map[mask_void_pixels] = 1.0
+                            if self.n_pixels_by_oracle_cb > 0:
+                                uncertainty_map[grid_oracle_cb[batch_ind]] = 1.0
 
-                        if self.debug:
-                            break
+                        # get top k pixels
+                        uncertainty_map = uncertainty_map.view(-1)  # (h * w)
+                        ind_best_queries = torch.topk(uncertainty_map,
+                                                      k=self.n_pixels_by_us,
+                                                      dim=0,
+                                                      largest=self.query_strategy in ["entropy", "least_confidence"]).indices  # k
 
-                    grid = grid / self.mc_n_steps  # note that this line is actually not necessary
-                    grid = grid.view(-1)  # (h * w)
-                    k = self.n_pixels_per_query // 2 if self.use_cb_sampling else self.n_pixels_per_query
-                    ind_best_queries = torch.topk(grid,
-                                                  k=k,
-                                                  dim=0,
-                                                  largest=True if self.vote_type == "hard" else self.query_strategy in ["entropy", "least_confidence"]).indices  # k
+                    if self.use_cb_sampling:
+                        ind_ignore_index = np.where(y.flatten() == self.ignore_index)[0]
+                        y_masked = y.flatten()[arr_masks[batch_ind].flatten()]
+                        set_unique_labels = set(y_masked)
 
-                else:
-                    dict_outputs = model(x)
+                        rarest_label = self.ignore_index
+                        cnt = np.inf
+                        for ul in set_unique_labels:
+                            if dict_label_counts[ul] < cnt:
+                                rarest_label = ul
+                        assert rarest_label != self.ignore_index
+                        y_flat = y.flatten()
+                        y_flat[~arr_masks[batch_ind].flatten()] = self.ignore_index
+                        mask_rarest_label = (y_flat == rarest_label)  # (h * w)
 
-                    if self.use_softmax:
-                        prob = dict_outputs["pred"]
+                        emb = dict_outputs["emb"]  # 1 x n_emb_dims x h / s x w / s
+                        emb = F.interpolate(emb, size=(h, w), mode='bilinear', align_corners=True).squeeze(dim=0)
 
-                    else:
-                        emb = dict_outputs['emb']  # b x n_emb_dims x h x w
-                        _, dist = prediction(emb.detach(), prototypes.detach(), return_distance=True)
-                        prob = F.softmax(-dist, dim=1)
+                        n_emb_dims = emb.shape[0]
+                        emb = emb.view(n_emb_dims, h * w)
+                        emb = emb.transpose(1, 0)  # (h * w) x n_emb_dims
+                        emb_rarest = emb[mask_rarest_label]  # m x n_emb_dims
+                        emb_mean = emb_rarest.mean(dim=0)  # n_emb_dims
 
-                    # get uncertainty map
-                    uncertainty_map = self.uncertainty_sampler(prob).squeeze(dim=0)  # h x w
+                        l2_dist = (emb - emb_mean.unsqueeze(dim=0)).pow(2).sum(dim=1).sqrt()
 
-                    # exclude pixels that are already annotated.
-                    uncertainty_map[arr_masks[batch_ind]] = 0.0 if self.query_strategy in ["entropy", "least_confidence"] else 1.0
+                        # compute distance from the closest labelled point
+                        grid = np.zeros((h, w))
+                        grid.fill(np.inf)
+                        grid_flat = grid.flatten()
 
-                    # exclude pixels that belong to void category.
-                    uncertainty_map[mask_void_pixels] = 0.0 if self.query_strategy in ["entropy", "least_confidence"] else 1.0
+                        grid_loc = list()
+                        for i in range(360 * 480):
+                            grid_loc.append([i // w, i % w])
+                        grid_loc = np.array(grid_loc)
 
-                    # get top k pixels
-                    uncertainty_map = uncertainty_map.view(-1)  # (h * w)
-                    k = self.n_pixels_per_query // 2 if self.use_cb_sampling else self.n_pixels_per_query
-                    ind_best_queries = torch.topk(uncertainty_map,
-                                                  k=k,
-                                                  dim=0,
-                                                  largest=self.query_strategy in ["entropy", "least_confidence"]).indices  # k
+                        list_ind = np.where(mask_rarest_label.flatten())[0]
+                        list_ind_2d = {(ind // w, ind % w) for ind in list_ind}
 
-                if self.use_cb_sampling:
-                    ind_ignore_index = np.where(y.flatten() == self.ignore_index)[0]
-                    y_masked = y.flatten()[arr_masks[batch_ind].flatten()]
-                    set_unique_labels = set(y_masked)
+                        for (i, j) in list_ind_2d:
+                            dist = ((grid_loc - np.expand_dims(np.array([i, j]), axis=0)) ** 2).sum(axis=1).squeeze()
+                            grid_flat = np.where(dist < grid_flat, dist, grid_flat)
+                        grid_flat = grid_flat / np.sqrt(h ** 2 + w ** 2)
+                        confidence_map = np.exp(-l2_dist.cpu().numpy() * grid_flat)
 
-                    rarest_label = self.ignore_index
-                    cnt = np.inf
-                    for ul in set_unique_labels:
-                        if dict_label_counts[ul] < cnt:
-                            rarest_label = ul
-                    assert rarest_label != self.ignore_index
-                    y_flat = y.flatten()
-                    # print((y_flat == rarest_label).sum())
-                    y_flat[~arr_masks[batch_ind].flatten()] = self.ignore_index
-                    # print("r", rarest_label, dict_label_counts[rarest_label])
-                    mask_rarest_label = (y_flat == rarest_label)  # (h * w)
-                    # print("mrl", mask_rarest_label.sum())
+                        # exclude the center points and the points where the uncertainty sampling already picked.
+                        confidence_map[list_ind] = 0.
+                        confidence_map[ind_best_queries.cpu().numpy()] = 0.
+                        confidence_map[ind_ignore_index] = 0.
 
-                    emb = dict_outputs["emb"]  # 1 x n_emb_dims x h / s x w / s
-                    emb = F.interpolate(emb, size=(h, w), mode='bilinear', align_corners=True).squeeze(dim=0)
+                        confidence_map = torch.tensor(confidence_map)
 
-                    n_emb_dims = emb.shape[0]
-                    emb = emb.view(n_emb_dims, h * w)
-                    emb = emb.transpose(1, 0)  # (h * w) x n_emb_dims
-                    emb_rarest = emb[mask_rarest_label]  # m x n_emb_dims
-                    emb_mean = emb_rarest.mean(dim=0)  # n_emb_dims
+                        ind_topk = torch.topk(confidence_map, k=self.n_pixels_by_us, largest=True).indices
 
-                    l2_dist = (emb - emb_mean.unsqueeze(dim=0)).pow(2).sum(dim=1).sqrt()
+                        for ind in ind_topk:
+                            selected_queries_per_img[ind] += 1
 
-                    # compute distance from the closest labelled point
-                    grid = np.zeros((h, w))
-                    grid.fill(np.inf)
-                    grid_flat = grid.flatten()
-
-                    grid_loc = list()
-                    for i in range(360 * 480):
-                        grid_loc.append([i // w, i % w])
-                    grid_loc = np.array(grid_loc)
-
-                    list_ind = np.where(mask_rarest_label.flatten())[0]
-                    list_ind_2d = {(ind // w, ind % w) for ind in list_ind}
-
-                    for (i, j) in list_ind_2d:
-                        dist = ((grid_loc - np.expand_dims(np.array([i, j]), axis=0)) ** 2).sum(axis=1).squeeze()
-                        grid_flat = np.where(dist < grid_flat, dist, grid_flat)
-                    # print('d', dist.min(), dist.max())
-                    grid_flat = grid_flat / np.sqrt(h ** 2 + w ** 2)
-                    confidence_map = np.exp(-l2_dist.cpu().numpy() * grid_flat)
-                    # confidence_map_2 = np.exp(-l2_dist.cpu().numpy())
-
-                    # exclude the center points and the points where the uncertainty sampling already picked.
-                    confidence_map[list_ind] = 0.
-                    confidence_map[ind_best_queries.cpu().numpy()] = 0.
-                    confidence_map[ind_ignore_index] = 0.
-
-                    confidence_map = torch.tensor(confidence_map)
-
-                    ind_topk = torch.topk(confidence_map, k=self.n_pixels_per_query // 2, largest=True).indices
-                    # assert (ind_topk != ind_best_queries.cpu().numpy())
-
-                    for ind in ind_topk:
+                    for ind in ind_best_queries:
                         selected_queries_per_img[ind] += 1
 
-                    # confidence_map_2[list_ind] = 0.
-                    #
-                    # confidence_map = torch.tensor(confidence_map)
-                    # confidence_map_2 = torch.tensor(confidence_map_2)
-                    #
-                    # ind_topk = torch.topk(confidence_map, k=100).indices
-                    # ind_topk_2 = torch.topk(confidence_map_2, k=100).indices
-                    # gt = y.flatten()[ind_topk]
-                    # gt_2 = y.flatten()[ind_topk_2]
-                    #
-                    # print((gt == rarest_label).sum() / 100)
-                    # print((gt_2 == rarest_label).sum() / 100)
-                    #
-                    # exit(12)
-                    # connp.zeros_like(confidence_map.numpy())
-                    # confidence_map[ind_topk] = 1.0
+                    selected_queries_per_img = selected_queries_per_img.view(h, w)
+                    list_quries.append(selected_queries_per_img.cpu().numpy())
 
-                    # confidence_map_2[torch.topk(confidence_map_2, k=100).indices]
+        if len(list_quries) > 0:
+            selected_queries = np.array(list_quries).astype(np.bool)
+            print(f"{selected_queries.sum()} labelled pixels  are chosen by {self.query_strategy} strategy")
 
-                    # confidence_map_2 = confidence_map_2.reshape(h, w) * 255
-                    # confidence_map_2 = confidence_map_2.astype(np.uint8)
+            if self.n_pixels_by_oracle_cb > 0:
+                selected_queries = np.maximum(grid_oracle_cb, selected_queries)
 
-                    # grid = confidence_map.reshape(h, w) * 255
-                    # grid = grid.astype(np.uint8)
-                    from PIL import Image
-
-                    # Image.fromarray()
-                    # x = x.cpu().numpy().squeeze()
-                    # x -= x.min()
-                    # x = x / x.max()
-                    # x *= 255.0
-                    # x = x.astype(np.uint8)
-                    # x = np.transpose(x, (1, 2, 0))
-                    #
-                    # Image.fromarray(x).show()
-                    # Image.fromarray(confidence_map_2).show()
-                    # Image.fromarray(grid).show()
-                    # exit(12)
-                    # np.random.seed(0)
-                    #
-                    # h, w = 360, 480
-                    # grid = np.zeros((h, w))
-                    # grid.fill(np.inf)
-                    # grid_flat = grid.flatten()
-                    #
-                    # grid_loc = list()
-                    # for i in range(360 * 480):
-                    #     grid_loc.append([i // w, i % w])
-                    # grid_loc = np.array(grid_loc)
-                    #
-                    # N = 100
-                    # list_ind = np.random.choice(range(len(grid_flat)), N, replace=False)
-                    # list_ind_2d = {(ind // w, ind % w) for ind in list_ind}
-                    #
-                    # for ind, (i, j) in tqdm(enumerate(list_ind_2d)):
-                    #     dist = ((grid_loc - np.expand_dims(np.array([i, j]), axis=0)) ** 2).sum(axis=1).squeeze()
-                    #     grid_flat = np.where(dist < grid_flat, dist, grid_flat)
-                    #
-                    # print(np.exp(- 0.00001 * grid_flat).min())
-                    # grid = np.exp(- 0.1 * grid_flat).reshape(h, w) * 255
-                    # grid = grid.astype(np.uint8)
-                    # Image.fromarray(grid).show()
-
-                    # emb = emb.transpose(1, 0).view(emb, h, w)
-                    # print(mask_rarest_label.sum())
-                    # print(dict_label_counts, set_unique_labels, rarest_label)
-                    # exit(12)
-
-                for ind in ind_best_queries:
-                    selected_queries_per_img[ind] += 1
-
-                selected_queries_per_img = selected_queries_per_img.view(h, w)
-                list_quries.append(selected_queries_per_img.cpu().numpy())
-        selected_queries = np.array(list_quries).astype(np.bool)
+        elif self.n_pixels_by_oracle_cb > 0:
+            selected_queries = grid_oracle_cb
+        else:
+            raise NotImplementedError
 
         # Update labels for query dataloader. Note that this does not update labels for training dataloader.
         self.dataloader.dataset.label_queries(selected_queries, nth_query + 1)
-        # self.dataloader.dataset.dict_label_counts = dict_label_counts
-        print(dict_label_counts)
-        print(np.array(list(dict_label_counts.values())).sum())
 
         # remove model file to save memory
-        os.remove(f"{self.dir_checkpoints}/{nth_query}_query/best_miou_model.pt")
+        # os.remove(f"{self.dir_checkpoints}/{nth_query}_query/best_miou_model.pt")
         return selected_queries
 
 
@@ -332,3 +323,134 @@ class UncertaintySampler:
 
     def __call__(self, prob):
         return getattr(self, f"_{self.query_strategy}")(prob)
+
+
+def get_n_per_class(dict_init, n_new_pixels=3670):
+    from copy import deepcopy
+    dict_prev = deepcopy(dict_init)
+    list_asc_keys = [i[0] for i in sorted(dict_init.items(), key=lambda x: x[1])]
+    list_prev_k = list()
+    cnt = 0
+
+    for i in range(len(list_asc_keys) - 1):
+        sorted_dict = dict(sorted(dict_init.items(), key=lambda x: x[1]))
+        v_0 = np.array(list(sorted_dict.values())[:-1])
+        v_1 = np.array(list(sorted_dict.values())[1:])
+
+        if ((v_0 - v_1) == 0).all():
+            n_pixels_per_class = n_new_pixels // len(dict_init)
+
+            for k in list(dict_init.keys()):
+                dict_init[k] += n_pixels_per_class
+
+                cnt += n_pixels_per_class
+
+            return dict_init
+
+        k, k_next = list_asc_keys[i], list_asc_keys[i + 1]
+
+        delta = dict_init[k_next] - dict_init[k]
+        if cnt + delta * (i + 1) > n_new_pixels:
+            n_pixels_per_class = (n_new_pixels - cnt) // (len(list_prev_k) + 1)  # including k
+            a = 0
+            for k_prev in list_prev_k:
+                dict_init[k_prev] += n_pixels_per_class
+                cnt += n_pixels_per_class
+                a += n_pixels_per_class
+
+            dict_init[k] += n_pixels_per_class
+            return dict_init
+
+        elif i == len(list_asc_keys) - 2:
+            for j in range(len(list_asc_keys) - 1):
+                dict_init[list_asc_keys[j]] += delta
+                cnt += delta
+
+            if cnt < n_new_pixels:
+                delta = n_new_pixels - cnt
+                n_pixels_per_class = delta // len(dict_init)
+                for k in list(dict_init.keys()):
+                    dict_init[k] += n_pixels_per_class
+                    cnt += n_pixels_per_class
+
+            return dict_init
+
+        else:
+            for k_prev in list_prev_k:
+                dict_init[k_prev] += delta
+            dict_init[k] += delta
+            assert dict_init[k] == dict_init[k_next], f"{dict_init[k]}, {dict_init[k_next]}"
+
+            list_prev_k.append(k)
+            cnt += delta * (i + 1)
+
+
+            # n labelled pixels per class for class balance considering the all classes (e.g. 11 for camvid)
+            # n_labelled_pixels_per_class_cb = (n_labelled_pixels // self.n_classes)
+            # print("n_labelled_pixels", n_labelled_pixels, n_labelled_pixels_per_class_cb)
+            #
+            # # detect classes that have more number of labelled pixels than it should have to keep class balance
+            # list_excessive_classes, list_insufficient_classes = list(), list()
+            # dict_label_n_excessive_pixels = {l: 0 for l in range(self.n_classes)}
+            # n_labelled_pixels_of_insufficient_classes, n_labelled_pixels_of_excessive_classes = 0, 0
+            # for l in range(self.n_classes):
+            #     if dict_label_counts[l] > n_labelled_pixels_per_class_cb:
+            #         dict_label_n_excessive_pixels[l] += (dict_label_counts[l] - n_labelled_pixels_per_class_cb)
+            #         list_excessive_classes.append(l)
+            #         n_labelled_pixels_of_excessive_classes += dict_label_counts[l]
+            #     else:
+            #         list_insufficient_classes.append(l)
+            #         n_labelled_pixels_of_insufficient_classes += dict_label_counts[l]
+            #
+            # n_excessive_classes, n_insufficient_classes = len(list_excessive_classes), len(list_insufficient_classes)
+            # assert n_insufficient_classes > 0, "n_insufficient_classes should be larger than 0"
+            #
+            # # compute the number of pixels for each class which lacks labels excluding the excessive classes
+            # n_labelled_pixels_per_class_cb = (n_labelled_pixels_of_insufficient_classes + n_labelled_pixels_per_query)
+            # n_labelled_pixels_per_class_cb_quotient = n_labelled_pixels_per_class_cb // n_insufficient_classes
+            #
+            # # adjust the quotient value by considering classes that have # labelled pixels lower than
+            # # # labelled pixels per class (for all classes) but higher than # labelled pixels per class
+            # # (for insufficient classes). This is kinda confusing but needs to be done to assure # new pixels for cb
+            # # to match n_labelled_pixels_per_query.
+            # tmp = 0
+            # n_classes_temp = 0
+            # for l in list_insufficient_classes:
+            #     delta = dict_label_counts[l] - n_labelled_pixels_per_class_cb_quotient
+            #     print(delta, dict_label_counts[l], n_labelled_pixels_per_class_cb_quotient)
+            #     if delta > 0:
+            #         tmp += delta
+            #         n_classes_temp += 1
+            #
+            # n_labelled_pixels_per_class_cb -= tmp
+            # n_labelled_pixels_per_class_cb_quotient = n_labelled_pixels_per_class_cb // n_insufficient_classes
+            # n_labelled_pixels_per_class_cb_remainder = n_labelled_pixels_per_class_cb % n_insufficient_classes
+            # print(n_labelled_pixels_per_class_cb_quotient, n_labelled_pixels_per_class_cb_remainder)
+            # print(n_labelled_pixels_per_class_cb, n_labelled_pixels_of_excessive_classes, n_labelled_pixels)
+            # print(dict_label_counts)
+            # assert n_labelled_pixels_per_class_cb + n_labelled_pixels_of_excessive_classes < n_labelled_pixels
+            #
+            # dict_n_labelled_pixels_per_class_cb = {l: 0 for l in range(self.n_classes)}
+            # for l, n in dict_n_labelled_pixels_per_class_cb.items():
+            #     if l not in list_excessive_classes:
+            #         n_new_labelled_pixels_per_class = n_labelled_pixels_per_class_cb_quotient - dict_label_counts[l]
+            #         if n_new_labelled_pixels_per_class > 0:
+            #             dict_n_labelled_pixels_per_class_cb[l] = n_new_labelled_pixels_per_class
+            # print(dict_n_labelled_pixels_per_class_cb)
+            # print(sum(dict_n_labelled_pixels_per_class_cb.values()))
+            # exit(12)
+            #
+            # print(dict_label_counts)
+            # print(dict_label_n_excessive_pixels)
+            #
+            # # list_labels_with_excessive_pixels = [k for k, v in dict_label_n_excessive_pixels.items() if v > 0]
+            # n_excessive_pixels = sum([v for v in dict_label_n_excessive_pixels.values()])
+            # n_labelled_pixels_per_class_cb = (n_labelled_pixels - n_excessive_pixels) // self.n_classes
+            # print(n_excessive_classes, n_excessive_pixels, n_labelled_pixels_per_class_cb)
+            #
+            # dict_n_labelled_pixels_per_class_cb = {l: 0 for l in range(self.n_classes)}
+            # for l, n in dict_n_labelled_pixels_per_class_cb.items():
+            #     if l not in n_excessive_classes:
+            #         dict_n_labelled_pixels_per_class_cb[l] = (n_labelled_pixels_per_class_cb - dict_label_counts[l])
+            # print(sum(dict_n_labelled_pixels_per_class_cb.values()))
+            # exit(12)

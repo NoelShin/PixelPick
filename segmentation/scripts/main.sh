@@ -1,5 +1,17 @@
 #!/home/gishin-temp/bin/sh
-python3 ../main_al.py --n_pixels_per_img 10 --seed 0  --suffix '' --use_aug --use_softmax --query_strategy 'entropy' --use_cb_sampling
+python3 ../main_al.py  --suffix '' --use_aug --use_softmax --query_strategy 'margin_sampling' --n_pixels_by_us 5 --n_pixels_by_oracle_cb 5 --seed 1 --debug
+#python3 ../main_al.py --n_pixels_per_img 10 --seed 2  --suffix '' --use_aug --use_softmax --query_strategy 'random' --use_oracle_cb
+#python3 ../main_al.py --n_pixels_per_img 10 --seed 3  --suffix '' --use_aug --use_softmax --query_strategy 'random' --use_oracle_cb
+#python3 ../main_al.py --n_pixels_per_img 10 --seed 4  --suffix '' --use_aug --use_softmax --query_strategy 'random' --use_oracle_cb
+
+
+#python3 ../main_al.py --n_pixels_per_img 10 --seed 0  --suffix '' --use_aug --use_softmax --query_strategy 'least_confidence' --use_mc_dropout
+#python3 ../main_al.py --n_pixels_per_img 10 --seed 0  --suffix '' --use_aug --use_softmax --query_strategy 'least_confidence' --use_cb_sampling
+#python3 ../main_al.py --n_pixels_per_img 10 --seed 0  --suffix '' --use_aug --use_softmax --query_strategy 'least_confidence' --use_mc_dropout --use_cb_sampling
+#python3 ../main_al.py --n_pixels_per_img 10 --seed 0  --suffix '' --use_aug --use_softmax --query_strategy 'least_confidence'
+
+#python3 ../main_al.py --n_pixels_per_img 10 --seed 0  --suffix '' --use_aug --use_softmax --query_strategy 'margin_sampling' --use_cb_sampling
+#python3 ../main_al.py --n_pixels_per_img 10 --seed 0  --suffix '' --use_aug --use_softmax --query_strategy 'entropy' --use_cb_sampling
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 1  --suffix '' --use_aug --use_softmax --query_strategy 'entropy' --use_mc_dropout
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 2  --suffix '' --use_aug --use_softmax --query_strategy 'entropy' --use_mc_dropout
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 3  --suffix '' --use_aug --use_softmax --query_strategy 'entropy' --use_mc_dropout

@@ -1,28 +1,28 @@
+import torch
 import numpy as np
-from tqdm import tqdm
+import cv2
 from PIL import Image
 
-np.random.seed(0)
 
-h, w = 360, 480
-grid = np.zeros((h, w))
-grid.fill(np.inf)
-grid_flat = grid.flatten()
+def get_edges(instance_tensor):
+    edge = torch.ByteTensor(instance_tensor.shape).zero_()
+    edge[:, :, 1:] = edge[:, :, 1:] | (instance_tensor[:, :, 1:] != instance_tensor[:, :, :-1])
+    edge[:, :, :-1] = edge[:, :, :-1] | (instance_tensor[:, :, 1:] != instance_tensor[:, :, :-1])
+    edge[:, 1:, :] = edge[:, 1:, :] | (instance_tensor[:, 1:, :] != instance_tensor[:, :-1, :])
+    edge[:, :-1, :] = edge[:, :-1, :] | (instance_tensor[:, 1:, :] != instance_tensor[:, :-1, :])
 
-grid_loc = list()
-for i in range(360 * 480):
-    grid_loc.append([i // w, i % w])
-grid_loc = np.array(grid_loc)
+    return edge.float()
 
-N = 100
-list_ind = np.random.choice(range(len(grid_flat)), N, replace=False)
-list_ind_2d = {(ind // w, ind % w) for ind in list_ind}
 
-for ind, (i, j) in tqdm(enumerate(list_ind_2d)):
-    dist = ((grid_loc - np.expand_dims(np.array([i, j]), axis=0)) ** 2).sum(axis=1).squeeze()
-    grid_flat = np.where(dist < grid_flat, dist, grid_flat)
+annot = Image.open('abcd.png')
+t = torch.from_numpy(np.array(annot)).unsqueeze(dim=0)
+print(t.shape)
+edge = get_edges(t).squeeze().numpy().astype(np.uint8)
+edge *= 255
+print(edge.shape)
 
-print(np.exp(- 0.00001 * grid_flat).min())
-grid = np.exp(- 0.1 * grid_flat).reshape(h, w) * 255
-grid = grid.astype(np.uint8)
-Image.fromarray(grid).show()
+dilated_edges = cv2.dilate(edge, np.ones((5, 5), np.uint8), iterations=1)
+
+Image.fromarray(edge).show()
+Image.fromarray(dilated_edges).show()
+

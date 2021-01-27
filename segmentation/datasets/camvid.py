@@ -43,19 +43,11 @@ class CamVidDataset(Dataset):
         self.pad_size = (0, 0)
 
         self.arr_masks = None
-        # self.dict_label_counts = {c: 0 for c in range(args.n_classes)}
 
         path_arr_masks = f"{args.dir_dataset}/{mode}/init_labelled_pixels_{self.seed}.npy"
-        if args.n_pixels_per_img != 0 and not val:
+        if (args.n_pixels_by_us + args.n_pixels_by_oracle_cb) != 0 and not val:
             if os.path.isfile(path_arr_masks):
                 self.arr_masks = np.load(path_arr_masks)
-                # for i in tqdm(range(len(self.list_labels))):
-                #     label_flat = np.array(Image.open(self.list_labels[i])).flatten()  # h * w
-                #     label_masked_flat = label_flat[self.arr_masks[i].flatten()]
-                #     set_unique_labels = set(label_masked_flat)
-                #     for ul in set_unique_labels:
-                #         self.dict_label_counts[ul] += (label_masked_flat == ul).sum()
-
             else:
                 np.random.seed(self.seed)
                 label = Image.open(self.list_labels[0])  # .convert("RGB")
@@ -76,12 +68,6 @@ class CamVidDataset(Dataset):
                     mask = mask_flat.reshape((h, w))
                     list_masks.append(mask)
 
-                    # label_flat = label.flatten()  # h * w
-                    # label_masked_flat = label_flat[mask_flat]
-                    # set_unique_labels = set(label_masked_flat)
-                    # for ul in set_unique_labels:
-                    #     self.dict_label_counts[ul] += (label_masked_flat == ul).sum()
-
                 arr_masks = np.array(list_masks, dtype=np.bool)
 
                 # save initial labelled pixels for a future reproduction
@@ -101,13 +87,16 @@ class CamVidDataset(Dataset):
     def label_queries(self, queries, nth_query):
         assert len(queries) == len(self.arr_masks), f"{queries.shape}, {self.arr_masks.shape}"
         previous = self.arr_masks.sum()
+
         self.arr_masks = np.maximum(self.arr_masks, queries)
+
         try:
             np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
         except FileNotFoundError:
             os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
             np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
-        print("# labelled pixels is changed from {} to {}".format(previous, self.arr_masks.sum()))
+        new = self.arr_masks.sum()
+        print("# labelled pixels is changed from {} to {} (delta: {})".format(previous, new, new - previous))
 
     def _geometric_augmentations(self, x, y, edge=None, merged_mask=None, x_blurred=None):
         if self.geometric_augmentations["random_scale"]:
