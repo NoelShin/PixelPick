@@ -189,6 +189,7 @@ class Arguments:
         # query strategy
         list_keywords.append(f"{args.query_strategy}") if args.n_pixels_by_us > 0 else None
         list_keywords.append("vote") if args.use_mc_dropout else None
+        list_keywords.append("soft") if args.vote_type == "soft" else None
         list_keywords.append(f"{args.n_pixels_by_us}")
         list_keywords.append("cb") if args.use_cb_sampling else None
         list_keywords.append("oracle_cb_{}".format(args.n_pixels_by_oracle_cb)) if args.n_pixels_by_oracle_cb > 0 else None
