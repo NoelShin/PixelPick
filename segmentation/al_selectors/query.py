@@ -307,17 +307,21 @@ class UncertaintySampler:
     def __init__(self, query_strategy):
         self.query_strategy = query_strategy
 
-    def _entropy(self, prob):
+    @staticmethod
+    def _entropy(prob):
         return (-prob * torch.log(prob)).sum(dim=1)  # b x h x w
 
-    def _least_confidence(self, prob):
+    @staticmethod
+    def _least_confidence(prob):
         return 1.0 - prob.max(dim=1)[0]  # b x h x w
 
-    def _margin_sampling(self, prob):
+    @staticmethod
+    def _margin_sampling(prob):
         top2 = prob.topk(k=2, dim=1).values  # b x k x h x w
         return (top2[:, 0, :, :] - top2[:, 1, :, :]).abs()  # b x h x w
 
-    def _random(self, prob):
+    @staticmethod
+    def _random(prob):
         b, _, h, w = prob.shape
         return torch.rand((b, h, w))
 

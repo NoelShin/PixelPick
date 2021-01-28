@@ -34,7 +34,7 @@ class Model:
         self.n_epochs = args.n_epochs
         self.n_epochs_query = args.n_epochs_query
         self.n_pixels_per_img = args.n_pixels_by_us + args.n_pixels_by_oracle_cb  # args.n_pixels_per_img
-        self.n_pixels_per_query = args.n_pixels_per_query
+        self.n_pixels_per_query = (args.n_pixels_by_us + args.n_pixels_by_oracle_cb)
         self.nth_query = -1
         self.stride_total = args.stride_total
         self.use_softmax = args.use_softmax
