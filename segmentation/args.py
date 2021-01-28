@@ -187,7 +187,7 @@ class Arguments:
                 list_keywords.append(str(args.w_repl))
 
         # query strategy
-        list_keywords.append(f"{args.query_strategy}") if args.n_pixels_per_img != 0 else None
+        list_keywords.append(f"{args.query_strategy}") if args.n_pixels_by_us > 0 else None
         list_keywords.append("vote") if args.use_mc_dropout else None
         list_keywords.append(f"{args.n_pixels_by_us}")
         list_keywords.append("cb") if args.use_cb_sampling else None
