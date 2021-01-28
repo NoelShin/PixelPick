@@ -336,7 +336,7 @@ class Model:
         dict_tensors = {'input': dict_data['x'][0].cpu(),
                         'target': dict_data['y'][0].cpu(),
                         'pred': pred[0].detach().cpu(),
-                        'confidence': 1.0 - confidence[0].cpu(),  # minus sign is to draw more uncertain part brighter
+                        'confidence': confidence[0].cpu(),
                         'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
                         'entropy': entropy[0].cpu()}
 
@@ -347,7 +347,7 @@ class Model:
     def _query(prob, query_strategy):
         # prob: b x n_classes x h x w
         if query_strategy == "least_confidence":
-            query = prob.max(dim=1)[0]  # b x h x w
+            query = 1.0 - prob.max(dim=1)[0]  # b x h x w
 
         elif query_strategy == "margin_sampling":
             query = prob.topk(k=2, dim=1).values  # b x k x h x w
