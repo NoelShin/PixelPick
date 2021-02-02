@@ -1,4 +1,4 @@
-from  torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.lr_scheduler import _LRScheduler
 
 
 class Poly(_LRScheduler):

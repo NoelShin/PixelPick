@@ -11,20 +11,26 @@ from torchvision.transforms import ColorJitter, RandomApply, RandomGrayscale
 import torchvision.transforms.functional as TF
 from tqdm import tqdm
 
-from utils.ced import CED
+# from utils.ced import CED
 
 
-class CamVidDataset(Dataset):
+class CityscapesDataset(Dataset):
     def __init__(self, args, val=False, query=False):
-        super(CamVidDataset, self).__init__()
+        super(CityscapesDataset, self).__init__()
         self.args = args
-        assert os.path.isdir(args.dir_dataset), f"{args.dir_dataset} does not exist."
+        if args.downsample > 1 and not val:
+            dir_dataset = f"{args.dir_dataset}_d{args.downsample}"
+        else:
+            dir_dataset = f"{args.dir_dataset}_d2"
+        assert os.path.isdir(dir_dataset), f"{dir_dataset} does not exist."
         self.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
         self.seed = args.seed
 
-        mode = "test" if val else "train"
-        self.list_inputs = sorted(glob(f"{args.dir_dataset}/{mode}/*.png"))
-        self.list_labels = sorted(glob(f"{args.dir_dataset}/{mode}annot/*.png"))
+        mode = "val" if val else "train"
+        self.list_inputs = sorted(glob(f"{dir_dataset}/leftImg8bit/{mode}/**/*.png"))
+        self.list_labels = sorted(glob(f"{dir_dataset}/gtFine/{mode}/**/*_labelIds.png"))
+
+        print(len(self.list_inputs), len(self.list_labels))
 
         assert len(self.list_inputs) == len(self.list_labels) and len(self.list_inputs) > 0
 
@@ -41,14 +47,14 @@ class CamVidDataset(Dataset):
             self.mean_val = tuple((np.array(args.mean) * 255.0).astype(np.uint8).tolist())
             self.ignore_index = args.ignore_index
 
-        self.crop_size = (360, 480)
+        self.crop_size = (256, 512)
         self.pad_size = (0, 0)
 
         self.arr_masks = None
 
         n_pixels_per_img = args.n_pixels_by_us
 
-        path_arr_masks = f"{args.dir_dataset}/{mode}/init_labelled_pixels_{self.seed}.npy"
+        path_arr_masks = f"{dir_dataset}/init_labelled_pixels_{self.seed}.npy"
         if (args.n_pixels_by_us + args.n_pixels_by_oracle_cb) != 0 and not val:
             if os.path.isfile(path_arr_masks):
                 self.arr_masks = np.load(path_arr_masks)
@@ -117,9 +123,6 @@ class CamVidDataset(Dataset):
             if merged_mask is not None:
                 merged_mask = TF.resize(merged_mask, (h_resized, w_resized), Image.NEAREST)
 
-            if x_blurred is not None:
-                x_blurred = TF.resize(x_blurred, (h_resized, w_resized), Image.BILINEAR)
-
         if self.geometric_augmentations["crop"]:
             w, h = x.size
             pad_h = max(self.crop_size[0] - h, 0)
@@ -127,15 +130,12 @@ class CamVidDataset(Dataset):
             self.pad_size = (pad_h, pad_w)
 
             x = TF.pad(x, (0, 0, pad_w, pad_h), fill=self.mean_val, padding_mode="constant")
-            y = TF.pad(y, (0, 0, pad_w, pad_h), fill=11, padding_mode="constant")
+            y = TF.pad(y, (0, 0, pad_w, pad_h), fill=self.ignore_index, padding_mode="constant")
             if edge is not None:
                 edge = TF.pad(edge, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
 
             if merged_mask is not None:
                 merged_mask = TF.pad(merged_mask, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
-
-            if x_blurred is not None:
-                x_blurred = TF.pad(x_blurred, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
 
             w, h = x.size
             start_h = randint(0, h - self.crop_size[0])
@@ -149,9 +149,6 @@ class CamVidDataset(Dataset):
             if merged_mask is not None:
                 merged_mask = TF.crop(merged_mask, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
 
-            if x_blurred is not None:
-                x_blurred = TF.crop(x_blurred, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
-
         if self.geometric_augmentations["random_hflip"]:
             if random() > 0.5:
                 x, y = TF.hflip(x), TF.hflip(y)
@@ -161,9 +158,6 @@ class CamVidDataset(Dataset):
 
                 if merged_mask is not None:
                     merged_mask = TF.hflip(merged_mask)
-
-                if x_blurred is not None:
-                    x_blurred = TF.hflip(x_blurred)
 
         if edge is not None:
             edge = torch.from_numpy(np.asarray(edge, dtype=np.uint8) // 255)
@@ -245,7 +239,6 @@ class CamVidDataset(Dataset):
 
     def __getitem__(self, ind):
         dict_data = dict()
-
         x, y = Image.open(self.list_inputs[ind]).convert("RGB"), Image.open(self.list_labels[ind])
 
         # if not val nor query dataset, do augmentation
@@ -254,11 +247,6 @@ class CamVidDataset(Dataset):
                 mask = Image.fromarray(self.arr_masks[ind].astype(np.uint8) * 255)
             else:
                 mask = None
-
-            if self.use_visual_acuity:
-                x_clean = x
-            else:
-                x_clean = None
 
             if self.use_img_inp:
                 if self.use_ced:
@@ -270,14 +258,12 @@ class CamVidDataset(Dataset):
             else:
                 merged_mask = None
 
-            x, y, mask, merged_mask, x_clean = self._geometric_augmentations(x, y, mask, merged_mask, x_clean)
+            x, y, mask, merged_mask, x_clean = self._geometric_augmentations(x, y, mask, merged_mask)
             x = self._photometric_augmentations(x)
 
             if self.geometric_augmentations["random_scale"]:
                 dict_data.update({"pad_size": self.pad_size})
             dict_data.update({'mask': mask, 'merged_mask': merged_mask})
-            if self.use_visual_acuity:
-                dict_data.update({"x_clean": TF.to_tensor(x_clean)})
 
             x = TF.to_tensor(x)
             x = TF.normalize(x, self.mean, self.std)
@@ -286,7 +272,8 @@ class CamVidDataset(Dataset):
             x = TF.to_tensor(x)
             x = TF.normalize(x, self.mean, self.std)
 
-        dict_data.update({'x': x, 'y': torch.tensor(np.asarray(y, np.int64), dtype=torch.long)})
+        dict_data.update({'x': x,
+                          'y': torch.tensor(np.asarray(y, np.int64), dtype=torch.long)})
         return dict_data
 
 
@@ -309,3 +296,93 @@ class GaussianBlur(object):
             sample = cv2.GaussianBlur(sample, (self.kernel_size, self.kernel_size), sigma)
 
         return sample
+
+
+def _make_downsampled_cityscapes(dir_cityscapes, downsample=4, val=False):
+    h, w = 1024, 2048
+    h_downsample, w_downsample = h // downsample, w // downsample
+    mode = "val" if val else "train"
+
+    list_inputs = sorted(glob(f"{dir_cityscapes}/leftImg8bit/{mode}/**/*.png"))
+    list_labels = sorted(glob(f"{dir_cityscapes}/gtFine/{mode}/**/*_labelIds.png"))
+
+    for x, y in tqdm(zip(list_inputs, list_labels)):
+        dst_x = os.path.dirname(x).replace("cityscapes", f"cityscapes_d{downsample}")
+        dst_y = os.path.dirname(y).replace("cityscapes", f"cityscapes_d{downsample}")
+        os.makedirs(dst_x, exist_ok=True)
+        os.makedirs(dst_y, exist_ok=True)
+
+        name_x, name_y = x.split('/')[-1], y.split('/')[-1]
+        x = Image.open(x).resize((w_downsample, h_downsample), resample=Image.BILINEAR)
+        y = Image.open(y).resize((w_downsample, h_downsample), resample=Image.NEAREST)
+
+        x.save(f"{dst_x}/{name_x}")
+        y.save(f"{dst_y}/{name_y}")
+    return
+
+
+def _reduce_cityscapes_labels(dir_cityscapes, val=False):
+    mode = "val" if val else "train"
+
+    list_labels = sorted(glob(f"{dir_cityscapes}/gtFine/{mode}/**/*_labelIds.png"))
+
+    for y in tqdm(list_labels):
+        path_y = y
+        y = np.array(Image.open(y))
+        y = _cityscapes_classes_to_labels(y)
+        Image.fromarray(y).save(f"{path_y}")
+    return
+
+
+def _cityscapes_classes_to_labels(label_arr):
+    ignore_class_label = 19
+    classes_to_labels = {
+        0: ignore_class_label,
+        1: ignore_class_label,
+        2: ignore_class_label,
+        3: ignore_class_label,
+        4: ignore_class_label,
+        5: ignore_class_label,
+        6: ignore_class_label,
+        7: 0,
+        8: 1,
+        9: ignore_class_label,
+        10: ignore_class_label,
+        11: 2,
+        12: 3,
+        13: 4,
+        14: ignore_class_label,
+        15: ignore_class_label,
+        16: ignore_class_label,
+        17: 5,
+        18: ignore_class_label,
+        19: 6,
+        20: 7,
+        21: 8,
+        22: 9,
+        23: 10,
+        24: 11,
+        25: 12,
+        26: 13,
+        27: 14,
+        28: 15,
+        29: ignore_class_label,
+        30: ignore_class_label,
+        31: 16,
+        32: 17,
+        33: 18,
+        -1: ignore_class_label
+    }
+    h, w = label_arr.shape
+    label_arr = label_arr.flatten()
+    for i in range(len(label_arr)):
+        label_arr[i] = classes_to_labels[label_arr[i].item()]
+    return label_arr.reshape((h, w))
+
+
+if __name__ == '__main__':
+    DOWNSAMPLE = 2
+    _make_downsampled_cityscapes("/scratch/shared/beegfs/gyungin/datasets/cityscapes", downsample=DOWNSAMPLE, val=False)
+    _make_downsampled_cityscapes("/scratch/shared/beegfs/gyungin/datasets/cityscapes", downsample=DOWNSAMPLE, val=True)
+    _reduce_cityscapes_labels(f"/scratch/shared/beegfs/gyungin/datasets/cityscapes_d{DOWNSAMPLE}", val=False)
+    _reduce_cityscapes_labels(f"/scratch/shared/beegfs/gyungin/datasets/cityscapes_d{DOWNSAMPLE}", val=True)

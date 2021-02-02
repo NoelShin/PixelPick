@@ -6,7 +6,6 @@ from copy import copy, deepcopy
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from networks.model import FPNSeg
@@ -54,6 +53,9 @@ class Model:
             self.model = DeepLab(args).to(self.device)
 
         self.criterion = get_criterion(args, self.device)
+
+        self.lr_scheduler_type = args.lr_scheduler_type
+
         self.vis = Visualiser(args.dataset_name)
         self.query_strategy = args.query_strategy
 
@@ -75,19 +77,33 @@ class Model:
         self.w_visual_acuity = args.w_visual_acuity
 
     def __call__(self):
-        for nth_query in range(self.max_budget // self.n_pixels_per_query + 1):
-            os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
-            write_log(f"{self.dir_checkpoints}/{nth_query}_query/log_train.txt",
-                      header=["epoch", "mIoU", "pixel_acc", "loss"])
-            write_log(f"{self.dir_checkpoints}/{nth_query}_query/log_val.txt",
-                      header=["epoch", "mIoU", "pixel_acc"])
+        # fully-supervised model
+        if self.n_pixels_per_query == 0:
+            self.dir_checkpoints = f"{self.dir_checkpoints}/fully_sup"
+            self.log_train = f"{self.dir_checkpoints}/log_train.txt"
+            self.log_val = f"{self.dir_checkpoints}/log_val.txt"
 
-            self.nth_query = nth_query
+            os.makedirs(f"{self.dir_checkpoints}", exist_ok=True)
+            write_log(f"{self.log_train}", header=["epoch", "mIoU", "pixel_acc", "loss"])
+            write_log(f"{self.log_val}", header=["epoch", "mIoU", "pixel_acc"])
 
             self._train()
 
-            # draw histograms
-            # ClassHistogram(self.args, nth_query).draw_hist()  # dst=f"{self.dir_checkpoints}/{nth_query}_query")
+            zip_file = zip_dir(f"{self.dir_checkpoints}", remove_dir=False)
+            send_file(zip_file, file_name=f"{self.experim_name}", remove_file=True)
+        # active learning model
+        else:
+            for nth_query in range(self.max_budget // self.n_pixels_per_query + 1):
+                self.dir_checkpoints = f"{self.dir_checkpoints}/{nth_query}_query"
+                self.log_train = f"{self.dir_checkpoints}/log_train.txt"
+                self.log_val = f"{self.dir_checkpoints}/log_val.txt"
+
+                # os.makedirs(f"{self.dir_checkpoints}", exist_ok=True)
+                # write_log(f"{self.log_train}", header=["epoch", "mIoU", "pixel_acc", "loss"])
+                # write_log(f"{self.log_val}", header=["epoch", "mIoU", "pixel_acc"])
+
+                self.nth_query = nth_query
+                self._train()
 
             zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query", remove_dir=False)
             send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
@@ -101,11 +117,13 @@ class Model:
         rmtree(f"{self.dir_checkpoints}") 
         return
 
-    def _train_epoch(self, epoch, model, optimizer, prototypes=None):
+    def _train_epoch(self, epoch, model, optimizer, lr_scheduler, prototypes=None):
         if self.n_pixels_per_img != 0:
             print(f"training an epoch {epoch} of {self.nth_query}th query ({self.dataloader.dataset.arr_masks.sum()} labelled pixels)")
-        log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_train.txt"
-        fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
+        log = f"{self.log_train}"
+        fp = f"{self.dir_checkpoints}/{epoch}_train.png"
+        # log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_train.txt"
+        # fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
 
         model.train()
         dataloader_iter = iter(self.dataloader)
@@ -117,18 +135,9 @@ class Model:
             dict_data = next(dataloader_iter)
             x, y = dict_data['x'].to(self.device), dict_data['y'].to(self.device)
 
-            if self.use_visual_acuity:
-                img_inp_target = dict_data['x_clean'].to(self.device)
-
             if self.n_pixels_per_img != 0:
                 mask = dict_data['mask'].to(self.device, torch.bool)
                 y.flatten()[~mask.flatten()] = self.ignore_index
-
-            if self.use_img_inp:
-                merged_mask = dict_data["merged_mask"].unsqueeze(dim=1).repeat((1, 3, 1, 1)).to(torch.bool)
-                img_inp_target = deepcopy(x)
-                # img_inp_target = x.flatten()[merged_mask.flatten()]
-                x.flatten()[merged_mask.flatten()] = torch.tensor(x.mean(), device=self.device, dtype=torch.float32)
 
             dict_outputs = model(x)
             if self.use_softmax:
@@ -160,16 +169,7 @@ class Model:
 
                 dict_losses = self.criterion(dict_outputs, prototypes, labels=y)
 
-            if self.use_img_inp:
-                img_inp_output = dict_outputs["img_inp"]
-                # img_inp_output = img_inp_output.flatten()[merged_mask.flatten()]
-                dict_losses.update({"img_inp": self.w_img_inp * F.mse_loss(img_inp_output, img_inp_target)})
-
-            elif self.use_visual_acuity:
-                corrected_input = dict_outputs["img_inp"]
-                dict_losses.update({"visual_acuity": 10 * F.mse_loss(corrected_input, img_inp_target)})
-
-            loss = torch.tensor(0, dtype=torch.float32).to(self.device)
+            loss = torch.tensor(0., dtype=torch.float32).to(self.device)
 
             fmt = "({:s}) Epoch {:d} | mIoU.: {:.3f} | pixel acc.: {:.3f} | Loss: {:.3f}"
             for loss_k, loss_v in dict_losses.items():
@@ -199,8 +199,14 @@ class Model:
                                             self.running_pixel_acc.avg,
                                             self.running_loss.avg))
 
+            if self.lr_scheduler_type == "Poly":
+                lr_scheduler.step(epoch=epoch-1)
+
             if self.debug:
                 break
+
+        if self.lr_scheduler_type == "MultiStepLR":
+            lr_scheduler.step(epoch=epoch - 1)
 
         write_log(log, list_entities=[epoch, self.running_miou.avg, self.running_pixel_acc.avg, self.running_loss.avg])
         self._reset_meters()
@@ -212,16 +218,12 @@ class Model:
         dict_tensors = {'input': x[0].cpu(),  # dict_data['x'][0].cpu(),
                         'target': dict_data['y'][0].cpu(),
                         'pred': pred[0].detach().cpu(),
-                        'confidence': -confidence[0].cpu(),  # minus sign is to draw more uncertain part brighter
+                        'confidence': confidence[0].cpu(),
                         'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
                         'entropy': entropy[0].cpu()}
 
-        if self.use_img_inp or self.use_visual_acuity:
-            dict_tensors.update({'img_inp_target': img_inp_target[0].cpu()})
-            dict_tensors.update({'img_inp_output': dict_outputs["img_inp"][0].detach().cpu()})
-
         self.vis(dict_tensors, fp=fp)
-        return model, optimizer, prototypes
+        return model, optimizer, lr_scheduler, prototypes
 
     def _train(self):
         print(f"\n ({self.experim_name}) training...\n")
@@ -229,6 +231,7 @@ class Model:
             model = FPNSeg(self.args).to(self.device)
         else:
             model = DeepLab(self.args).to(self.device)
+
         prototypes = init_prototypes(self.n_classes, self.n_emb_dims, self.n_prototypes,
                                      mode='mean',
                                      model=self.model,
@@ -241,8 +244,10 @@ class Model:
         lr_scheduler = get_lr_scheduler(self.args, optimizer=optimizer, iters_per_epoch=len(self.dataloader))
 
         for e in range(1, 1 + self.n_epochs):
-            model, optimizer, prototypes = self._train_epoch(e, model, optimizer, prototypes)
-            lr_scheduler.step(e)
+            model, optimizer, lr_scheduler, prototypes = self._train_epoch(e, model, optimizer, lr_scheduler, prototypes)
+
+            # if type(lr_scheduler, )
+            # lr_scheduler.step(e)
             self._val(e, model, prototypes)
             if self.debug:
                 break
@@ -250,8 +255,7 @@ class Model:
         return
 
     def _val(self, epoch, model, prototypes=None):
-        log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_val.txt"
-
+        # log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_val.txt"
         model.eval()
 
         dataloader_iter = iter(self.dataloader_val)
@@ -317,12 +321,13 @@ class Model:
                 # state_dict_prototypes = prototypes.state_dict()
                 state_dict.update({"prototypes": prototypes.cpu()})
 
-            torch.save(state_dict, f"{self.dir_checkpoints}/{self.nth_query}_query/best_miou_model.pt")
+            torch.save(state_dict, f"{self.dir_checkpoints}/best_miou_model.pt")
+            # torch.save(state_dict, f"{self.dir_checkpoints}/{self.nth_query}_query/best_miou_model.pt")
             print("best model has been saved (epoch: {:d} | prev. miou: {:.4f} => new miou: {:.4f})."
                   .format(epoch, self.best_miou, self.running_miou.avg))
             self.best_miou = self.running_miou.avg
 
-        write_log(log, list_entities=[epoch, self.running_miou.avg, self.running_pixel_acc.avg])
+        write_log(self.log_val, list_entities=[epoch, self.running_miou.avg, self.running_pixel_acc.avg])
         print('\n' + '=' * 100)
         print("Experim name:", self.experim_name)
         print("Epoch {:d} | miou: {:.3f} | pixel_acc.: {:.3f}".format(epoch,
@@ -343,7 +348,8 @@ class Model:
                         'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
                         'entropy': entropy[0].cpu()}
 
-        self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_val.png")
+        self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{epoch}_val.png")
+        # self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_val.png")
         return
 
     @staticmethod

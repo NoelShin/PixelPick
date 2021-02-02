@@ -49,7 +49,11 @@ def get_criterion(args, device):
 
 
 def get_dataloader(args, batch_size, n_workers, shuffle, val=False, query=False):
-    if args.dataset_name == "cv":
+    if args.dataset_name == "cs":
+        from datasets.cityscapes import CityscapesDataset
+        dataset = CityscapesDataset(args, val, query=query)
+
+    elif args.dataset_name == "cv":
         from datasets.camvid import CamVidDataset
         dataset = CamVidDataset(args, val, query=query)
 
@@ -70,7 +74,7 @@ def get_dataloader(args, batch_size, n_workers, shuffle, val=False, query=False)
 
 def get_optimizer(args, model, prototypes=None):
     optimizer_params = args.optimizer_params
-    if args.dataset_name == "cv":
+    if args.dataset_name == "cs":
         from torch.optim import Adam
         if args.network_name == "FPN":
             list_params = [{'params': model.encoder.parameters(),
@@ -97,11 +101,75 @@ def get_optimizer(args, model, prototypes=None):
                              'lr': optimizer_params['lr'],
                              'weight_decay': optimizer_params['weight_decay']}]
 
-        if prototypes is not None:
-            list_params += [{'params': prototypes,
-                             'lr': 0.001,
-                             'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
         optimizer = Adam(list_params)
+
+    elif args.dataset_name == "cv":
+        if args.optimizer_type == "SGD":
+            from torch.optim import SGD
+            if args.network_name == "FPN":
+                list_params = [{'params': model.encoder.parameters(),
+                                'lr': 1e-3,
+                                'weight_decay': 5e-4,
+                                'momentum': 0.9}]
+
+                list_params += [{'params': model.decoder.parameters(),
+                                 'lr': 1e-2,
+                                 'weight_decay': 5e-4,
+                                 'momentum': 0.9}]
+            else:
+                list_params = [{'params': model.backbone.parameters(),
+                                'lr': 1e-3,
+                                'weight_decay': 5e-4,
+                                'momentum': 0.9}]
+
+                list_params += [{'params': model.aspp.parameters(),
+                                 'lr': 1e-2,
+                                 'weight_decay': 5e-4,
+                                 'momentum': 0.9}]
+
+                list_params += [{'params': model.low_level_conv.parameters(),
+                                 'lr': 1e-2,
+                                 'weight_decay': 5e-4,
+                                 'momentum': 0.9}]
+
+                list_params += [{'params': model.seg_head.parameters(),
+                                 'lr': 1e-2,
+                                 'weight_decay': 5e-4,
+                                 'momentum': 0.9}]
+            optimizer = SGD(list_params)
+
+        elif args.optimizer_type == "Adam":
+            from torch.optim import Adam
+            if args.network_name == "FPN":
+                list_params = [{'params': model.encoder.parameters(),
+                                'lr': optimizer_params['lr'] / 10,
+                                'weight_decay': optimizer_params['weight_decay']}]
+
+                list_params += [{'params': model.decoder.parameters(),
+                                 'lr': optimizer_params['lr'],
+                                 'weight_decay': optimizer_params['weight_decay']}]
+            else:
+                list_params = [{'params': model.backbone.parameters(),
+                                'lr': optimizer_params['lr'] / 10,
+                                'weight_decay': optimizer_params['weight_decay']}]
+
+                list_params += [{'params': model.aspp.parameters(),
+                                 'lr': optimizer_params['lr'],
+                                 'weight_decay': optimizer_params['weight_decay']}]
+
+                list_params += [{'params': model.low_level_conv.parameters(),
+                                 'lr': optimizer_params['lr'],
+                                 'weight_decay': optimizer_params['weight_decay']}]
+
+                list_params += [{'params': model.seg_head.parameters(),
+                                 'lr': optimizer_params['lr'],
+                                 'weight_decay': optimizer_params['weight_decay']}]
+
+            if prototypes is not None:
+                list_params += [{'params': prototypes,
+                                 'lr': 0.001,
+                                 'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
+            optimizer = Adam(list_params)
 
     elif args.dataset_name == "voc":
         from torch.optim import SGD
@@ -129,8 +197,19 @@ def get_optimizer(args, model, prototypes=None):
 
 
 def get_lr_scheduler(args, optimizer, iters_per_epoch=-1):
-    if args.dataset_name == "cv":
-        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 40], gamma=0.1)
+    if args.dataset_name == "cs":
+        if args.lr_scheduler_type == "MultiStepLR":
+            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 40], gamma=0.1)
+        elif args.lr_scheduler_type == "Poly":
+            from .lr_scheduler import Poly
+            lr_scheduler = Poly(optimizer, args.n_epochs, iters_per_epoch)
+
+    elif args.dataset_name == "cv":
+        if args.lr_scheduler_type == "MultiStepLR":
+            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20, 40], gamma=0.1)
+        elif args.lr_scheduler_type == "Poly":
+            from .lr_scheduler import Poly
+            lr_scheduler = Poly(optimizer, args.n_epochs, iters_per_epoch)
 
     elif args.dataset_name == "voc":
         from utils.lr_scheduler import Poly
