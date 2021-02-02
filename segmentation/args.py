@@ -29,6 +29,9 @@ class Arguments:
 
         parser.add_argument("--n_pixels_by_oracle_cb", type=int, default=0)
 
+        # semi-supervised learning
+        parser.add_argument("--use_pseudo_label", action="store_true", default=False, help="use pseudo-labelling")
+
         # QBC
         parser.add_argument("--use_mc_dropout", action="store_true", default=False)
         parser.add_argument("--mc_dropout_p", type=float, default=0.2)
@@ -40,7 +43,7 @@ class Arguments:
         parser.add_argument("--n_workers", type=int, default=4)
 
         # dataset
-        parser.add_argument("--dataset_name", type=str, default="cv", choices=["cv", "voc"])
+        parser.add_argument("--dataset_name", type=str, default="cv", choices=["cs", "cv", "voc"])
         parser.add_argument("--dir_datasets", type=str, default="/scratch/shared/beegfs/gyungin/datasets")
         parser.add_argument("--use_augmented_dataset", action="store_true", default=False, help="whether to use the augmented dataset for pascal voc")
 
@@ -78,16 +81,21 @@ class Arguments:
         args = self.parser.parse_args()
 
         args.stride_total = 8 if args.use_dilated_resnet else 32
-        if args.dataset_name == "cv":
-            args.batch_size = 4
-            args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/camvid"
-            args.ignore_index = 11
-            args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
-            args.std = [0.27413549931506, 0.28506257482912, 0.28284674400252]
-            args.n_classes = 11
-            args.n_epochs = 50
+        if args.dataset_name == "cs":
+            args.batch_size = 8
+            args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/cityscapes"
+            args.downsample = 4
+            args.ignore_index = 19
+            args.mean = [0.28689554, 0.32513303, 0.28389177]
+            args.std = [0.18696375, 0.19017339, 0.18720214]
+            args.n_classes = 19
+            args.n_epochs = 50  # 50
 
             args.optimizer_type = "Adam"
+            args.lr_scheduler_type = "Poly"  # Poly or MultiStepLR
+            assert args.lr_scheduler_type in ["Poly", "MultiStepLR"]
+
+            # This params are for Adam
             args.optimizer_params = {
                 "lr": 5e-4,
                 "betas": (0.9, 0.999),
@@ -105,7 +113,42 @@ class Arguments:
                 "photometric": {
                     "random_color_jitter": args.use_aug,
                     "random_grayscale": args.use_aug,
-                    "random_gaussian_blur": False  # args.use_aug
+                    "random_gaussian_blur": args.use_aug
+                }
+            }
+
+        elif args.dataset_name == "cv":
+            args.batch_size = 4
+            args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/camvid"
+            args.ignore_index = 11
+            args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
+            args.std = [0.27413549931506, 0.28506257482912, 0.28284674400252]
+            args.n_classes = 11
+            args.n_epochs = 100  # 50
+
+            args.optimizer_type = "Adam"
+            args.lr_scheduler_type = "Poly"
+            assert args.lr_scheduler_type in ["Poly", "MultiStepLR"]
+
+            # This params are for Adam
+            args.optimizer_params = {
+                "lr": 5e-4,
+                "betas": (0.9, 0.999),
+                "weight_decay": 2e-4,
+                "eps": 1e-7
+            }
+
+            args.augmentations = {
+                "geometric": {
+                    "random_hflip": True,  # args.use_aug,
+                    "random_scale": True,  # args.use_aug,
+                    "crop": True  # args.use_aug
+                },
+
+                "photometric": {
+                    "random_color_jitter": True,  # args.use_aug,
+                    "random_grayscale": True,  # args.use_aug,
+                    "random_gaussian_blur": True  # args.use_aug
                 }
             }
 
