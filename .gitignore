@@ -1,4 +1,7 @@
 *.pyc
+*.png
+*.npy
+*.pt
 segmentation/logs
 segmentation/scripts
 segmentation/networks/backbones/pretrained/*
