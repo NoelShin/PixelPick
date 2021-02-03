@@ -386,3 +386,9 @@ if __name__ == '__main__':
     _make_downsampled_cityscapes("/scratch/shared/beegfs/gyungin/datasets/cityscapes", downsample=DOWNSAMPLE, val=True)
     _reduce_cityscapes_labels(f"/scratch/shared/beegfs/gyungin/datasets/cityscapes_d{DOWNSAMPLE}", val=False)
     _reduce_cityscapes_labels(f"/scratch/shared/beegfs/gyungin/datasets/cityscapes_d{DOWNSAMPLE}", val=True)
+
+    DOWNSAMPLE = 4
+    _make_downsampled_cityscapes("/scratch/shared/beegfs/gyungin/datasets/cityscapes", downsample=DOWNSAMPLE, val=False)
+    _make_downsampled_cityscapes("/scratch/shared/beegfs/gyungin/datasets/cityscapes", downsample=DOWNSAMPLE, val=True)
+    _reduce_cityscapes_labels(f"/scratch/shared/beegfs/gyungin/datasets/cityscapes_d{DOWNSAMPLE}", val=False)
+    _reduce_cityscapes_labels(f"/scratch/shared/beegfs/gyungin/datasets/cityscapes_d{DOWNSAMPLE}", val=True)
