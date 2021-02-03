@@ -1,4 +1,5 @@
 import os
+from shutil import rmtree
 from math import ceil
 from copy import copy, deepcopy
 
@@ -88,6 +89,8 @@ class Model:
 
             self._train()
 
+            zip_file = zip_dir(f"{self.dir_checkpoints}", remove_dir=False)
+            send_file(zip_file, file_name=f"{self.experim_name}", remove_file=True)
         # active learning model
         else:
             for nth_query in range(self.max_budget // self.n_pixels_per_query + 1):
@@ -99,27 +102,19 @@ class Model:
                 write_log(f"{self.log_train}", header=["epoch", "mIoU", "pixel_acc", "loss"])
                 write_log(f"{self.log_val}", header=["epoch", "mIoU", "pixel_acc"])
 
-                # os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
-                # write_log(f"{self.dir_checkpoints}/{nth_query}_query/log_train.txt",
-                #           header=["epoch", "mIoU", "pixel_acc", "loss"])
-                # write_log(f"{self.dir_checkpoints}/{nth_query}_query/log_val.txt",
-                #           header=["epoch", "mIoU", "pixel_acc"])
-
                 self.nth_query = nth_query
-
                 self._train()
 
-                # draw histograms
-                # ClassHistogram(self.args, nth_query).draw_hist()  # dst=f"{self.dir_checkpoints}/{nth_query}_query")
-
-                # zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query")
-                # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query")
+                zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query", remove_dir=False)
+                send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
                 if nth_query == (self.max_budget // self.n_pixels_per_query) or self.n_pixels_per_img == 0:
                     break
 
                 # select queries using the current model and label them.
                 queries = self.query_selector(nth_query)
                 self.dataloader.dataset.label_queries(queries, nth_query + 1)
+        
+        rmtree(f"{self.dir_checkpoints}") 
         return
 
     def _train_epoch(self, epoch, model, optimizer, lr_scheduler, prototypes=None):

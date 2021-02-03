@@ -237,6 +237,8 @@ class Arguments:
         list_keywords.append("cb") if args.use_cb_sampling else None
         list_keywords.append("oracle_cb_{}".format(args.n_pixels_by_oracle_cb)) if args.n_pixels_by_oracle_cb > 0 else None
         list_keywords.append("img_inp") if args.use_img_inp else None
+        list_keywords.append("ced") if args.use_img_inp and args.use_ced else None
+        list_keywords.append("va") if args.use_visual_acuity else None
 
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None
