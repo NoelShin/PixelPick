@@ -249,7 +249,7 @@ class CamVidDataset(Dataset):
                                     val=False,
                                     query=True,
                                     shuffle=False,
-                                    batch_size=self.args.batch_size,
+                                    batch_size=1,
                                     n_workers=self.args.n_workers)
 
         list_pseudo_labels = list()
