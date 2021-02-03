@@ -48,6 +48,13 @@ class AverageMeter(object):
         self.sum = 0
         self.count = 0
 
+    def reset(self):
+        self.initialized = False
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
     def initialize(self, val, weight):
         self.val = val
         self.avg = val

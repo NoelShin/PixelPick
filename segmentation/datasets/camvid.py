@@ -11,6 +11,7 @@ from torchvision.transforms import ColorJitter, RandomApply, RandomGrayscale
 import torchvision.transforms.functional as TF
 from tqdm import tqdm
 
+from utils.utils import get_dataloader
 from utils.ced import CED
 
 
@@ -20,6 +21,7 @@ class CamVidDataset(Dataset):
         self.args = args
         assert os.path.isdir(args.dir_dataset), f"{args.dir_dataset} does not exist."
         self.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu:0")
         self.seed = args.seed
 
         mode = "test" if val else "train"
@@ -85,6 +87,14 @@ class CamVidDataset(Dataset):
 
         self.use_visual_acuity = args.use_visual_acuity
 
+        # pseudo-label
+        self.use_pseudo_label = args.use_pseudo_label
+        self.pseudo_label_flag = False
+        if self.use_pseudo_label:
+            from pseudo_labelling.local_sim import LocalSimilarity
+            self.local_similarity = LocalSimilarity(args)
+            self.pseudo_labels = None
+
         self.val = val
         self.query = query
 
@@ -102,7 +112,7 @@ class CamVidDataset(Dataset):
         new = self.arr_masks.sum()
         print("# labelled pixels is changed from {} to {} (delta: {})".format(previous, new, new - previous))
 
-    def _geometric_augmentations(self, x, y, edge=None, merged_mask=None, x_blurred=None):
+    def _geometric_augmentations(self, x, y, edge=None, y_pseudo=None):
         if self.geometric_augmentations["random_scale"]:
             w, h = x.size
             rs = uniform(0.5, 2.0)
@@ -114,11 +124,8 @@ class CamVidDataset(Dataset):
             if edge is not None:
                 edge = TF.resize(edge, (h_resized, w_resized), Image.NEAREST)
 
-            if merged_mask is not None:
-                merged_mask = TF.resize(merged_mask, (h_resized, w_resized), Image.NEAREST)
-
-            if x_blurred is not None:
-                x_blurred = TF.resize(x_blurred, (h_resized, w_resized), Image.BILINEAR)
+            if y_pseudo is not None:
+                y_pseudo = TF.resize(y_pseudo, (h_resized, w_resized), Image.NEAREST)
 
         if self.geometric_augmentations["crop"]:
             w, h = x.size
@@ -128,14 +135,12 @@ class CamVidDataset(Dataset):
 
             x = TF.pad(x, (0, 0, pad_w, pad_h), fill=self.mean_val, padding_mode="constant")
             y = TF.pad(y, (0, 0, pad_w, pad_h), fill=11, padding_mode="constant")
+
             if edge is not None:
                 edge = TF.pad(edge, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
 
-            if merged_mask is not None:
-                merged_mask = TF.pad(merged_mask, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
-
-            if x_blurred is not None:
-                x_blurred = TF.pad(x_blurred, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
+            if y_pseudo is not None:
+                TF.pad(y_pseudo, (0, 0, pad_w, pad_h), fill=11, padding_mode="constant")
 
             w, h = x.size
             start_h = randint(0, h - self.crop_size[0])
@@ -145,12 +150,8 @@ class CamVidDataset(Dataset):
             y = TF.crop(y, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
             if edge is not None:
                 edge = TF.crop(edge, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
-
-            if merged_mask is not None:
-                merged_mask = TF.crop(merged_mask, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
-
-            if x_blurred is not None:
-                x_blurred = TF.crop(x_blurred, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
+            if y_pseudo is not None:
+                y_pseudo = TF.crop(y_pseudo, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
 
         if self.geometric_augmentations["random_hflip"]:
             if random() > 0.5:
@@ -159,23 +160,18 @@ class CamVidDataset(Dataset):
                 if edge is not None:
                     edge = TF.hflip(edge)
 
-                if merged_mask is not None:
-                    merged_mask = TF.hflip(merged_mask)
-
-                if x_blurred is not None:
-                    x_blurred = TF.hflip(x_blurred)
+                if y_pseudo is not None:
+                    y_pseudo = TF.hflip(y_pseudo)
 
         if edge is not None:
             edge = torch.from_numpy(np.asarray(edge, dtype=np.uint8) // 255)
         else:
             edge = torch.tensor(0)
 
-        if merged_mask is not None:
-            merged_mask = torch.from_numpy(np.asarray(merged_mask, dtype=np.uint8) // 255)
-        else:
-            merged_mask = torch.tensor(0)
+        if y_pseudo is None:
+            y_pseudo = torch.tensor(0)
 
-        return x, y, edge, merged_mask, x_blurred
+        return x, y, edge, y_pseudo
 
     def _photometric_augmentations(self, x):
         if self.photometric_augmentations["random_color_jitter"]:
@@ -243,10 +239,44 @@ class CamVidDataset(Dataset):
     def __len__(self):
         return len(self.list_inputs)
 
+    def update_pseudo_label(self, model):
+        print("Updating pseudo-labels...")
+        if not self.pseudo_label_flag:
+            self.pseudo_label_flag = True
+
+        masks = torch.tensor(self.arr_masks).to(self.device)
+        dataloader = get_dataloader(self.args,
+                                    val=False,
+                                    query=True,
+                                    shuffle=False,
+                                    batch_size=self.args.batch_size,
+                                    n_workers=self.args.n_workers)
+
+        list_pseudo_labels = list()
+        with torch.no_grad():
+            for batch_ind, dict_data in tqdm(enumerate(dataloader)):
+                x, y = dict_data['x'].to(self.device), dict_data['y'].to(self.device)
+                try:
+                    mask = masks[batch_ind * self.args.batch_size: (batch_ind + 1) * self.args.batch_size]
+                except IndexError:
+                    mask = masks[batch_ind * self.args.batch_size:]
+
+                dict_output = model(x)
+                emb = dict_output["emb"]
+                list_pseudo_labels.extend(self.local_similarity(emb, y, mask))
+
+        self.pseudo_labels = torch.stack(list_pseudo_labels, dim=0).cpu().numpy().astype(np.uint8)
+        self.local_similarity.print()
+        self.local_similarity.reset_metrics()
+
     def __getitem__(self, ind):
         dict_data = dict()
 
         x, y = Image.open(self.list_inputs[ind]).convert("RGB"), Image.open(self.list_labels[ind])
+        if self.pseudo_label_flag:
+            y_pseudo = Image.fromarray(self.pseudo_labels[ind])
+        else:
+            y_pseudo = None
 
         # if not val nor query dataset, do augmentation
         if not self.val and not self.query:
@@ -255,29 +285,14 @@ class CamVidDataset(Dataset):
             else:
                 mask = None
 
-            if self.use_visual_acuity:
-                x_clean = x
-            else:
-                x_clean = None
+            x, y, mask, y_pseudo = self._geometric_augmentations(x, y, mask, y_pseudo)
 
-            if self.use_img_inp:
-                if self.use_ced:
-                    merged_mask = self._ced_mask(x)
-                else:
-                    w, h = x.size
-                    merged_mask, list_region_masks_params = self._sample_region_masks(h, w, divider=8, n_patches=8)
-
-            else:
-                merged_mask = None
-
-            x, y, mask, merged_mask, x_clean = self._geometric_augmentations(x, y, mask, merged_mask, x_clean)
             x = self._photometric_augmentations(x)
 
-            if self.geometric_augmentations["random_scale"]:
-                dict_data.update({"pad_size": self.pad_size})
-            dict_data.update({'mask': mask, 'merged_mask': merged_mask})
-            if self.use_visual_acuity:
-                dict_data.update({"x_clean": TF.to_tensor(x_clean)})
+            # if self.geometric_augmentations["random_scale"]:
+            #     dict_data.update({"pad_size": self.pad_size})
+            dict_data.update({'mask': mask, 'y_pseudo': torch.tensor(np.asarray(y_pseudo, np.int64),
+                                                                     dtype=torch.long)})
 
             x = TF.to_tensor(x)
             x = TF.normalize(x, self.mean, self.std)

@@ -356,6 +356,30 @@ class EmbeddingVisualiser:
         self.dict_label_emb = {i: list() for i in range(self.n_classes)}
 
 
+def colorise_label(arr):
+    palette = {
+                0: (128, 128, 128),
+                1: (128, 0, 0),
+                2: (192, 192, 128),
+                3: (128, 64, 128),
+                4: (0, 0, 192),
+                5: (128, 128, 0),
+                6: (192, 128, 128),
+                7: (64, 64, 128),
+                8: (64, 0, 128),
+                9: (64, 64, 0),
+                10: (0, 128, 192),
+                11: (0, 0, 0)
+            }
+    assert len(arr.shape) == 2
+    grid = np.empty((3, *arr.shape), dtype=np.uint8)
+    for i in range(arr.shape[0]):
+        for j in range(arr.shape[1]):
+            grid[:, i, j] = palette[arr[i, j]]
+    return grid
+
+
+
 class Visualiser:
     def __init__(self, dataset_name):
         if dataset_name == "cv":

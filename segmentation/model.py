@@ -105,10 +105,10 @@ class Model:
                 write_log(f"{self.log_val}", header=["epoch", "mIoU", "pixel_acc"])
 
                 self.nth_query = nth_query
-                self._train()
+                model = self._train()
 
-                zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=False)
-                send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
+                # zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=False)
+                # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
                 if nth_query == (self.max_budget // self.n_pixels_per_query) or self.n_pixels_per_img == 0:
                     break
 
@@ -117,8 +117,8 @@ class Model:
                 self.dataloader.dataset.label_queries(queries, nth_query + 1)
 
                 # pseudo-labelling based on the current labels
-                # if self.use_pseudo_label:
-                #     self.pseudo_label()
+                if self.use_pseudo_label:
+                    self.dataloader.dataset.update_pseudo_label(model)
 
         rmtree(f"{self.dir_checkpoints}")
         return
@@ -141,11 +141,17 @@ class Model:
             dict_data = next(dataloader_iter)
             x, y = dict_data['x'].to(self.device), dict_data['y'].to(self.device)
 
+            # if active learning
             if self.n_pixels_per_img != 0:
-                mask = dict_data['mask'].to(self.device, torch.bool)
-                y.flatten()[~mask.flatten()] = self.ignore_index
+                if self.use_pseudo_label and self.nth_query > 0:
+                    y = dict_data["y_pseudo"].to(self.device)
+                else:
+                    mask = dict_data['mask'].to(self.device, torch.bool)
+                    y.flatten()[~mask.flatten()] = self.ignore_index
 
+            # forward pass
             dict_outputs = model(x)
+
             if self.use_softmax:
                 logits = dict_outputs["pred"]
                 dict_losses = {"ce": F.cross_entropy(logits, y, ignore_index=self.ignore_index)}
@@ -258,7 +264,7 @@ class Model:
             if self.debug:
                 break
         self.best_miou = -1.0
-        return
+        return model
 
     def _val(self, epoch, model, prototypes=None):
         # log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_val.txt"
