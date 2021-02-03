@@ -1,6 +1,4 @@
-import os
 from argparse import ArgumentParser
-from utils.utils import write_log
 
 
 class Arguments:
