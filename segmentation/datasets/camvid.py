@@ -256,10 +256,11 @@ class CamVidDataset(Dataset):
         with torch.no_grad():
             for batch_ind, dict_data in tqdm(enumerate(dataloader)):
                 x, y = dict_data['x'].to(self.device), dict_data['y'].to(self.device)
-                try:
-                    mask = masks[batch_ind * self.args.batch_size: (batch_ind + 1) * self.args.batch_size]
-                except IndexError:
-                    mask = masks[batch_ind * self.args.batch_size:]
+                mask = masks[batch_ind].unsqueeze(dim=0)
+                # try:
+                #     mask = masks[batch_ind * self.args.batch_size: (batch_ind + 1) * self.args.batch_size]
+                # except IndexError:
+                #     mask = masks[batch_ind * self.args.batch_size:]
 
                 dict_output = model(x)
                 emb = dict_output["emb"]
