@@ -29,7 +29,6 @@ class QuerySelector:
 
         self.network_name = args.network_name
         self.uncertainty_sampler = UncertaintySampler(args.query_strategy)
-        self.use_pseudo_label = args.use_pseudo_label
         self.use_softmax = args.use_softmax
         self.query_strategy = args.query_strategy
         self.use_cb_sampling = args.use_cb_sampling
@@ -221,13 +220,6 @@ class QuerySelector:
                                                       dim=0,
                                                       largest=self.query_strategy in ["entropy",
                                                                                       "least_confidence"]).indices  # k
-                        if self.use_pseudo_label:
-                            ind_worst_queries = torch.topk(uncertainty_map,
-                                                           k=self.n_pixels_by_us,
-                                                           dim=0,
-                                                           largest=self.query_strategy not in ["entropy",
-                                                                                               "least_confidence"]).indices
-
 
                     if self.use_cb_sampling:
                         ind_ignore_index = np.where(y.flatten() == self.ignore_index)[0]

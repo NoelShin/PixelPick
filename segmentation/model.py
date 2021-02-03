@@ -76,36 +76,38 @@ class Model:
         self.use_visual_acuity = args.use_visual_acuity
         self.w_visual_acuity = args.w_visual_acuity
 
+        self.use_pseudo_label = args.use_pseudo_label
+
     def __call__(self):
         # fully-supervised model
         if self.n_pixels_per_query == 0:
-            self.dir_checkpoints = f"{self.dir_checkpoints}/fully_sup"
-            self.log_train = f"{self.dir_checkpoints}/log_train.txt"
-            self.log_val = f"{self.dir_checkpoints}/log_val.txt"
+            dir_checkpoints = f"{self.dir_checkpoints}/fully_sup"
+            self.log_train = f"{dir_checkpoints}/log_train.txt"
+            self.log_val = f"{dir_checkpoints}/log_val.txt"
 
-            os.makedirs(f"{self.dir_checkpoints}", exist_ok=True)
+            os.makedirs(f"{dir_checkpoints}", exist_ok=True)
             write_log(f"{self.log_train}", header=["epoch", "mIoU", "pixel_acc", "loss"])
             write_log(f"{self.log_val}", header=["epoch", "mIoU", "pixel_acc"])
 
             self._train()
 
-            zip_file = zip_dir(f"{self.dir_checkpoints}", remove_dir=False)
+            zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=False)
             send_file(zip_file, file_name=f"{self.experim_name}", remove_file=True)
         # active learning model
         else:
             for nth_query in range(self.max_budget // self.n_pixels_per_query + 1):
-                self.dir_checkpoints = f"{self.dir_checkpoints}/{nth_query}_query"
-                self.log_train = f"{self.dir_checkpoints}/log_train.txt"
-                self.log_val = f"{self.dir_checkpoints}/log_val.txt"
+                dir_checkpoints = f"{self.dir_checkpoints}/{nth_query}_query"
+                self.log_train = f"{dir_checkpoints}/log_train.txt"
+                self.log_val = f"{dir_checkpoints}/log_val.txt"
 
-                os.makedirs(f"{self.dir_checkpoints}", exist_ok=True)
+                os.makedirs(f"{dir_checkpoints}", exist_ok=True)
                 write_log(f"{self.log_train}", header=["epoch", "mIoU", "pixel_acc", "loss"])
                 write_log(f"{self.log_val}", header=["epoch", "mIoU", "pixel_acc"])
 
                 self.nth_query = nth_query
                 self._train()
 
-                zip_file = zip_dir(f"{self.dir_checkpoints}", remove_dir=False)
+                zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=False)
                 send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
                 if nth_query == (self.max_budget // self.n_pixels_per_query) or self.n_pixels_per_img == 0:
                     break
@@ -113,15 +115,19 @@ class Model:
                 # select queries using the current model and label them.
                 queries = self.query_selector(nth_query)
                 self.dataloader.dataset.label_queries(queries, nth_query + 1)
-        
-        rmtree(f"{self.dir_checkpoints}") 
+
+                # pseudo-labelling based on the current labels
+                # if self.use_pseudo_label:
+                #     self.pseudo_label()
+
+        rmtree(f"{self.dir_checkpoints}")
         return
 
     def _train_epoch(self, epoch, model, optimizer, lr_scheduler, prototypes=None):
         if self.n_pixels_per_img != 0:
             print(f"training an epoch {epoch} of {self.nth_query}th query ({self.dataloader.dataset.arr_masks.sum()} labelled pixels)")
         log = f"{self.log_train}"
-        fp = f"{self.dir_checkpoints}/{epoch}_train.png"
+        fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
         # log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_train.txt"
         # fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
 
@@ -321,7 +327,7 @@ class Model:
                 # state_dict_prototypes = prototypes.state_dict()
                 state_dict.update({"prototypes": prototypes.cpu()})
 
-            torch.save(state_dict, f"{self.dir_checkpoints}/best_miou_model.pt")
+            torch.save(state_dict, f"{self.dir_checkpoints}/{self.nth_query}_query/best_miou_model.pt")
             # torch.save(state_dict, f"{self.dir_checkpoints}/{self.nth_query}_query/best_miou_model.pt")
             print("best model has been saved (epoch: {:d} | prev. miou: {:.4f} => new miou: {:.4f})."
                   .format(epoch, self.best_miou, self.running_miou.avg))
@@ -348,7 +354,7 @@ class Model:
                         'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
                         'entropy': entropy[0].cpu()}
 
-        self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{epoch}_val.png")
+        self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_val.png")
         # self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_val.png")
         return
 
