@@ -105,7 +105,7 @@ class Model:
                 self.nth_query = nth_query
                 self._train()
 
-                zip_file = zip_dir(f"{self.dir_checkpoints}/{nth_query}_query", remove_dir=False)
+                zip_file = zip_dir(f"{self.dir_checkpoints}", remove_dir=False)
                 send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
                 if nth_query == (self.max_budget // self.n_pixels_per_query) or self.n_pixels_per_img == 0:
                     break
