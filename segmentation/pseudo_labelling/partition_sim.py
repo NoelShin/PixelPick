@@ -1,6 +1,7 @@
 import os
 from glob import glob
 from sys import path
+
 path.append("../")
 import numpy as np
 import torch
@@ -9,7 +10,8 @@ import cv2
 from PIL import Image
 from tqdm import tqdm
 from args import Arguments
-from utils.utils import get_dataloader
+from utils.utils import get_dataloader, colorise_label
+
 from utils.metrics import AverageMeter
 from networks.deeplab import DeepLab
 
@@ -26,13 +28,22 @@ class LocalSimilarity:
                                        'recall': AverageMeter(),
                                        'f1_score': AverageMeter()} for c in range(12)}
 
-    def _compute_metrics_global(self, grid, label):
+    def _compute_metrics_global(self, grid, label, mask):
+        set_unique_labels = set((label * mask).cpu().numpy().flatten())
+        print(set_unique_labels)
+        for ul in set_unique_labels:
+            TP_FP = (grid == ul)
+            TP = torch.logical_and(grid == ul, label == grid)
+
+        TP = (grid == label).sum()
+
+
 
         return
 
     def _partition(self, points):
         ind_points = np.where(points)
-        print(ind_points)
+        # print(ind_points)
         arr_h = np.expand_dims(np.array(range(self.h), np.int32), axis=1).repeat(self.w, axis=1)
         arr_w = np.expand_dims(np.array(range(self.w), np.int32), axis=0).repeat(self.h, axis=0)
 
@@ -50,26 +61,18 @@ class LocalSimilarity:
         distance_maps = np.array(list_distance_maps)
         grid = distance_maps.argmin(axis=0).squeeze()
 
-        return grid
+        return grid, ind_points
 
     def _compute_metrics(self, window_grid, window_label, point_label):
         n_total_class = (window_label == point_label).sum()
         n_total_sim_class = (window_grid == point_label).sum()  # tp + fp
 
         TP = torch.logical_and((window_grid == point_label), (window_label == point_label)).sum()
-        FN = torch.logical_and(torch.logical_and(window_grid != point_label, window_grid != self.ignore_index),
-                               (window_label == point_label)).sum()
-
-        # Image.fromarray((window_grid != point_label).cpu().numpy()).show()
-        # Image.fromarray((window_label != point_label).cpu().numpy()).show()
-        #Image.fromarray(torch.logical_and(window_label != point_label,
-        #                                  window_label != self.ignore_index).cpu().numpy()).show()
-
-        # exit(12)
-
-        # FN = ((window_grid != point_label) != (window_label != point_label)).sum()
-
-        TP_FP = (window_grid == point_label).sum()
+        FN = ((window_grid != point_label) != (window_label != point_label)).sum()
+        TP_FP = n_total_sim_class
+        TP_FN = n_total_class
+        assert TP <= TP_FP, f"{TP}, {TP_FP}"
+        assert TP <= TP_FN, f"{TP}, {TP_FN}"
         precision = TP / TP_FP
         recall = (TP / (TP + FN))
         f1_score = 2 * (precision * recall) / (precision + recall)
@@ -91,7 +94,7 @@ class LocalSimilarity:
                   .format(k, v["prec"].avg, v["recall"].avg, v['f1_score'].avg))
 
         print("mean prec: {:.3f} | mean recall: {:.3f} | mean F1 score: {:.3f}\n"
-              .format(np.mean(list_prec[:-1]), np.mean(list_recall[:-1]), np.mean(list_f1[:-1])))
+              .format(np.mean(list_prec), np.mean(list_recall), np.mean(list_f1)))
 
     def write(self, fp):
         with open(fp, 'w') as f:
@@ -101,7 +104,7 @@ class LocalSimilarity:
                 list_recall.append(v["recall"].avg)
                 list_f1.append(v["f1_score"].avg)
                 f.write(f"{k}, {v['prec'].avg}, {v['recall'].avg}, {v['f1_score'].avg}\n")
-            f.write(f"mean, {np.mean(list_prec[:-1])}, {np.mean(list_recall[:-1])}, {np.mean(list_f1[:-1])}\n")
+            f.write(f"mean, {np.mean(list_prec)}, {np.mean(list_recall)}, {np.mean(list_f1)}\n")
             f.close()
 
     def reset_metrics(self):
@@ -113,7 +116,7 @@ class LocalSimilarity:
     def get_metrics(self):
         return self.dict_class_metrics
 
-    def _otsu(self, sim, window_grid, point_label):
+    def _otsu(self, sim, window_grid=None, point_label=None):
         sim = torch.tanh(sim)  # using tanh gives a slightly better f1_score
 
         sim -= sim.min()
@@ -121,8 +124,11 @@ class LocalSimilarity:
         sim *= 255
         sim = np.clip(sim.cpu().numpy(), 0, 255).astype(np.uint8)
         thres, window_binary = cv2.threshold(sim, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        window_grid.flatten()[torch.tensor(window_binary.flatten() == 255)] = point_label
-        return window_grid
+        if None not in [window_grid, point_label]:
+            window_grid.flatten()[torch.tensor(window_binary.flatten() == 255)] = point_label
+            return window_grid
+        else:
+            return thres
 
     def _baseline(self, window_grid, point_label):
         window_grid.fill_(point_label)
@@ -200,32 +206,105 @@ class LocalSimilarity:
 
     def __call__(self, emb, y, mask, window_size):
         emb = F.interpolate(emb, size=(self.h, self.w), mode='bilinear', align_corners=True)
-        list_pseudo_labels = list()
 
-        n_pixels_per_img = mask[0].sum()
-        # window_size = window_size  # int(np.sqrt(self.h * self.w) // n_pixels_per_img + 1)
+        grid = torch.zeros_like(y).fill_(self.ignore_index)
 
-        for b in range(emb.shape[0]):
-            pseudo_label = self._compute_local_similarity(emb[b], y[b], mask[b], window_size)
-            list_pseudo_labels.append(pseudo_label)
+        partitions, ind_points = self._partition(mask[0].cpu().numpy())
+        for p in range(partitions.max()):
+            emb_point = emb[0, :, ind_points[0][p], ind_points[1][p]]  # 256
+            y_point = y[0, ind_points[0][p], ind_points[1][p]]
+            mask_p = (partitions == p)  # h x w
 
-        return list_pseudo_labels
+            mask_rec = np.where(mask_p)
+            t, b, l, r = mask_rec[0].min(), mask_rec[0].max(), mask_rec[1].min(), mask_rec[1].max()
+            mask_rec = mask_p[t: b + 1, l: r + 1]  # h_p x w_p
+
+            emb_rec = emb[0, :, t: b + 1, l: r + 1]  # 256 x h_p x w_p
+            emb_point = emb_point.unsqueeze(1).unsqueeze(2).repeat(1, emb_rec.shape[1], emb_rec.shape[2])
+            sim = F.cosine_similarity(emb_rec, emb_point, dim=0)  # h_p x w_p
+            sim_p = sim.flatten()[mask_rec.flatten()]
+            thres = self._otsu(sim_p)
+            thres = torch.tensor(thres).to(device)
+            # print(sim_p.shape, thres)
+
+            sim = torch.tanh(sim)  # using tanh gives a slightly better f1_score
+            sim -= sim.min()
+            sim = sim / sim.max()
+            sim *= 255
+
+            # print(mask_rec.shape, sim.shape)
+            mask_rec = torch.tensor(mask_rec).to(device)
+            window = torch.zeros_like(mask_rec, dtype=torch.long).fill_(self.ignore_index)  # h_p x w_p
+            window[torch.logical_and(mask_rec, sim > thres)] = y_point
+
+            # compute metrics
+            y_rec = y[0, t: b + 1, l: r + 1]  # h_p x w_p
+            y_rec_flat = y_rec.flatten()
+            y_rec_flat[~mask_rec.flatten()] = self.ignore_index
+            y_rec = y_rec_flat.reshape(b - t + 1, r - l + 1)
+            # y = colorise_label(y_rec_flat.reshape(b - t + 1, r - l + 1).cpu().numpy())
+            # Image.fromarray(np.transpose(y, (1, 2, 0))).show()
+            # exit(12)
+
+            TP_FP = (window == y_point).sum()
+            TP_mask = torch.logical_and(window == y_point, y_rec == y_point)
+            TP = TP_mask.sum()
+
+            TN_FN_mask = torch.logical_and(window != y_point, y_rec != self.ignore_index)
+
+            FN_mask = torch.logical_and(TN_FN_mask, TP_mask)
+            FN = FN_mask.sum()
+
+            prec = TP / TP_FP
+            recall = TP / (TP + FN)
+            f1 = 2 * (prec * recall) / (prec + recall)
+
+            self.dict_class_metrics[y_point.cpu().numpy().item()]["prec"].update(prec.cpu().numpy())
+            self.dict_class_metrics[y_point.cpu().numpy().item()]["recall"].update(recall.cpu().numpy())
+            self.dict_class_metrics[y_point.cpu().numpy().item()]["f1_score"].update(f1.cpu().numpy())
+
+            grid[0, t: b + 1, l: r + 1] = window
+
+            # print(grid)
+            # a = colorise_label(grid[0].cpu().numpy())
+            # Image.fromarray(np.transpose(a, (1, 2, 0))).show()
+            # y = y[0].cpu().numpy()
+
+            # y_flat = y.flatten()
+            # y_flat[~mask_p.flatten()] = self.ignore_index
+            # y = colorise_label(y_flat.reshape(360, 480))
+            # Image.fromarray(np.transpose(y, (1, 2, 0))).show()
+            # exit(12)
+
+            # emb_p = emb[:, :, torch.tensor(mask_p).to(device)].view(c, -1)
+            # emb_point = emb_point.unsqueeze(1).repeat(1, emb_p.shape[1])
+            # sim = F.cosine_similarity(emb_p, emb_point, dim=0).unsqueeze(dim=0)  # to make it a binary image
+
+            # hist = torch.histc(sim, bins=255)
+            # import matplotlib.pyplot as plt
+            # plt.bar(range(255), hist.cpu().numpy(), width=1)
+            # plt.show()
+            # plt.close()
+
+            # y_p = y.flatten()[torch.tensor(mask_p).flatten().to(device)]
+        return grid
+
 
 
 dict_cv_label_category = {
-        0: "sky",
-        1: "building",
-        2: "pole",
-        3: "road",
-        4: "pavement",
-        5: "tree",
-        6: "sign symbol",
-        7: "fence",
-        8: "car",
-        9: "pedestrian",
-        10: "bicyclist",
-        11: "void"
-    }
+    0: "sky",
+    1: "building",
+    2: "pole",
+    3: "road",
+    4: "pavement",
+    5: "tree",
+    6: "sign symbol",
+    7: "fence",
+    8: "car",
+    9: "pedestrian",
+    10: "bicyclist",
+    11: "void"
+}
 
 
 def get_gt_labels(dir_annot):
@@ -242,7 +321,7 @@ if __name__ == '__main__':
     args.n_pixels_by_us = 10
     args.use_pseudo_label = True
 
-    args.labelling_strategy = "local_sim"
+    args.labelling_strategy = "baseline"
 
     WINDOW_SIZE = 3
 
@@ -253,7 +332,7 @@ if __name__ == '__main__':
 
     torch.manual_seed(0)
     model = DeepLab(args).to(device)
-    state_dict = torch.load("best_model_q0_rand.pt")
+    state_dict = torch.load("best_model_q0.pt")
     model.load_state_dict(state_dict["model"])
 
     pseudo_labelling = LocalSimilarity(args)
@@ -268,17 +347,19 @@ if __name__ == '__main__':
     masked_labels = torch.tensor(gt_labels) * masks.cpu()
 
     model.eval()
-    for window_size in range(63, 67, 2):
-        with torch.no_grad():
-            for batch_ind, dict_data in tqdm(enumerate(dataloader)):
-                x, y = dict_data['x'].to(device), dict_data['y'].to(device)
-                b = x.shape[0]
-                mask = masks[batch_ind].unsqueeze(dim=0)
-                # * args.batch_size: (batch_ind + 1) * args.batch_size]
+    with torch.no_grad():
+        list_plabels = list()
+        for batch_ind, dict_data in tqdm(enumerate(dataloader)):
+            x, y = dict_data['x'].to(device), dict_data['y'].to(device)
+            b = x.shape[0]
+            mask = masks[batch_ind].unsqueeze(dim=0)
+            # * args.batch_size: (batch_ind + 1) * args.batch_size]
 
-                dict_output = model(x)
-                emb, pred = dict_output["emb"], dict_output["pred"]
+            dict_output = model(x)
+            emb, pred = dict_output["emb"], dict_output["pred"]
 
-                pseudo_labelling(emb, y, mask, window_size)
-        pseudo_labelling.print()
-        pseudo_labelling.write(fp=f"{window_size}_{args.labelling_strategy}.txt")
+            plabel = pseudo_labelling(emb, y, mask, None)
+            list_plabels.append(plabel)
+
+    pseudo_labelling.print()
+    pseudo_labelling.write(fp=f"partition_{args.labelling_strategy}.txt")
