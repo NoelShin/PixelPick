@@ -140,7 +140,7 @@ class CamVidDataset(Dataset):
                 edge = TF.pad(edge, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
 
             if y_pseudo is not None:
-                TF.pad(y_pseudo, (0, 0, pad_w, pad_h), fill=11, padding_mode="constant")
+                y_pseudo = TF.pad(y_pseudo, (0, 0, pad_w, pad_h), fill=11, padding_mode="constant")
 
             w, h = x.size
             start_h = randint(0, h - self.crop_size[0])
@@ -239,7 +239,7 @@ class CamVidDataset(Dataset):
     def __len__(self):
         return len(self.list_inputs)
 
-    def update_pseudo_label(self, model):
+    def update_pseudo_label(self, model, window_size, nth_query):
         print("Updating pseudo-labels...")
         if not self.pseudo_label_flag:
             self.pseudo_label_flag = True
@@ -253,6 +253,8 @@ class CamVidDataset(Dataset):
                                     n_workers=self.args.n_workers)
 
         list_pseudo_labels = list()
+
+        model.eval()
         with torch.no_grad():
             for batch_ind, dict_data in tqdm(enumerate(dataloader)):
                 x, y = dict_data['x'].to(self.device), dict_data['y'].to(self.device)
@@ -264,10 +266,11 @@ class CamVidDataset(Dataset):
 
                 dict_output = model(x)
                 emb = dict_output["emb"]
-                list_pseudo_labels.extend(self.local_similarity(emb, y, mask))
+                list_pseudo_labels.extend(self.local_similarity(emb, y, mask, window_size))
 
         self.pseudo_labels = torch.stack(list_pseudo_labels, dim=0).cpu().numpy().astype(np.uint8)
         self.local_similarity.print()
+        self.local_similarity.write(fp=f"{self.dir_checkpoints}/{nth_query}_query/pr.txt")
         self.local_similarity.reset_metrics()
 
     def __getitem__(self, ind):
@@ -286,7 +289,7 @@ class CamVidDataset(Dataset):
             else:
                 mask = None
 
-            x, y, mask, y_pseudo = self._geometric_augmentations(x, y, mask, y_pseudo)
+            x, y, mask, y_pseudo = self._geometric_augmentations(x, y, edge=mask, y_pseudo=y_pseudo)
 
             x = self._photometric_augmentations(x)
 

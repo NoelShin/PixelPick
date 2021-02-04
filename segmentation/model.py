@@ -77,6 +77,7 @@ class Model:
         self.w_visual_acuity = args.w_visual_acuity
 
         self.use_pseudo_label = args.use_pseudo_label
+        self.window_size = args.window_size
 
     def __call__(self):
         # fully-supervised model
@@ -118,9 +119,9 @@ class Model:
 
                 # pseudo-labelling based on the current labels
                 if self.use_pseudo_label:
-                    self.dataloader.dataset.update_pseudo_label(model)
+                    self.dataloader.dataset.update_pseudo_label(model, window_size=self.window_size, nth_query=nth_query)
 
-        rmtree(f"{self.dir_checkpoints}")
+        # rmtree(f"{self.dir_checkpoints}")
         return
 
     def _train_epoch(self, epoch, model, optimizer, lr_scheduler, prototypes=None):
@@ -143,11 +144,11 @@ class Model:
 
             # if active learning
             if self.n_pixels_per_img != 0:
+                mask = dict_data['mask'].to(self.device, torch.bool)
+                y.flatten()[~mask.flatten()] = self.ignore_index
+
                 if self.use_pseudo_label and self.nth_query > 0:
-                    y = dict_data["y_pseudo"].to(self.device)
-                else:
-                    mask = dict_data['mask'].to(self.device, torch.bool)
-                    y.flatten()[~mask.flatten()] = self.ignore_index
+                    y_pseudo = dict_data["y_pseudo"].to(self.device)
 
             # forward pass
             dict_outputs = model(x)
@@ -157,6 +158,9 @@ class Model:
                 dict_losses = {"ce": F.cross_entropy(logits, y, ignore_index=self.ignore_index)}
                 pred = logits.argmax(dim=1)  # for computing mIoU, pixel acc.
                 prob = F.softmax(logits.detach(), dim=1)
+
+                if self.use_pseudo_label and self.nth_query > 0:
+                    dict_losses.update({"ce_pseudo": F.cross_entropy(logits, y_pseudo, ignore_index=self.ignore_index)})
 
             else:
                 emb = dict_outputs['emb']  # b x n_emb_dims x h x w

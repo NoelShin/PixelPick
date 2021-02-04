@@ -29,6 +29,8 @@ class Arguments:
 
         # semi-supervised learning
         parser.add_argument("--use_pseudo_label", action="store_true", default=False, help="use pseudo-labelling")
+        parser.add_argument("--labelling_strategy", type=str, default="local_sim")
+        parser.add_argument("--window_size", type=int, default=5)
 
         # QBC
         parser.add_argument("--use_mc_dropout", action="store_true", default=False)
@@ -122,7 +124,7 @@ class Arguments:
             args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
             args.std = [0.27413549931506, 0.28506257482912, 0.28284674400252]
             args.n_classes = 11
-            args.n_epochs = 1  # 50
+            args.n_epochs = 50  # 50
 
             args.optimizer_type = "Adam"
             args.lr_scheduler_type = "Poly"

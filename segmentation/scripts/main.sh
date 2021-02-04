@@ -1,5 +1,5 @@
 #!/home/gishin-temp/bin/sh
-python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'random' --n_pixels_by_us 10 --seed 0 --use_pseudo_label
+python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'random' --n_pixels_by_us 10 --seed 0 --use_pseudo_label --debug
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 2  --suffix '' --use_aug --use_softmax --query_strategy 'random' --use_oracle_cb
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 3  --suffix '' --use_aug --use_softmax --query_strategy 'random' --use_oracle_cb
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 4  --suffix '' --use_aug --use_softmax --query_strategy 'random' --use_oracle_cb
