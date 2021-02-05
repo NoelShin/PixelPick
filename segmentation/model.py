@@ -119,9 +119,9 @@ class Model:
 
                 # pseudo-labelling based on the current labels
                 if self.use_pseudo_label:
-                    self.dataloader.dataset.update_pseudo_label(model, window_size=self.window_size, nth_query=nth_query)
+                    self.dataloader.dataset.update_pseudo_label(model, window_size=self.window_size, nth_query=nth_query + 1)
 
-        # rmtree(f"{self.dir_checkpoints}")
+        rmtree(f"{self.dir_checkpoints}")
         return
 
     def _train_epoch(self, epoch, model, optimizer, lr_scheduler, prototypes=None):

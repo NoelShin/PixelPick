@@ -240,7 +240,8 @@ class Arguments:
         list_keywords.append("ced") if args.use_img_inp and args.use_ced else None
         list_keywords.append("va") if args.use_visual_acuity else None
         list_keywords.append("pseudo") if args.use_pseudo_label else None
-
+        if args.use_pseudo_label:
+            list_keywords.append(f"{args.labelling_strategy}")
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None
         list_keywords.append("debug") if args.debug else None
