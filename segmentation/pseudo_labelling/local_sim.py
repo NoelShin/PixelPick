@@ -3,6 +3,7 @@ from glob import glob
 from sys import path
 path.append("../")
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 import cv2
@@ -24,11 +25,11 @@ class LocalSimilarity:
 
         self.dict_class_metrics = {c: {'prec': AverageMeter(),
                                        'recall': AverageMeter(),
-                                       'f1_score': AverageMeter()} for c in range(12)}
-
-    def _compute_metrics_global(self, grid, label):
-
-        return
+                                       'f1_score': AverageMeter(),
+                                       'prec_g': AverageMeter(),
+                                       'recall_g': AverageMeter(),
+                                       'f1_score_g': AverageMeter()
+                                       } for c in range(12)}
 
     def _partition(self, points):
         ind_points = np.where(points)
@@ -52,56 +53,105 @@ class LocalSimilarity:
 
         return grid
 
-    def _compute_metrics(self, window_grid, window_label, point_label):
-        n_total_class = (window_label == point_label).sum()
-        n_total_sim_class = (window_grid == point_label).sum()  # tp + fp
+    def _plot_masks(self, dict_masks):
+        for k, v in dict_masks.items():
+            if isinstance(v, torch.Tensor):
+                dict_masks[k] = v.cpu().numpy()
 
-        TP = torch.logical_and((window_grid == point_label), (window_label == point_label)).sum()
-        FN = torch.logical_and(torch.logical_and(window_grid != point_label, window_grid != self.ignore_index),
-                               (window_label == point_label)).sum()
+        fig, ax = plt.subplots(ncols=len(dict_masks))
+        for i, (k, v) in enumerate(dict_masks.items()):
+            ax[i].imshow(v, cmap="gray")
+            ax[i].set_xlabel(k)
+        plt.tight_layout()
+        plt.show()
+        plt.close()
+        exit(12)
+        return
 
-        # Image.fromarray((window_grid != point_label).cpu().numpy()).show()
-        # Image.fromarray((window_label != point_label).cpu().numpy()).show()
-        #Image.fromarray(torch.logical_and(window_label != point_label,
-        #                                  window_label != self.ignore_index).cpu().numpy()).show()
+    def _compute_metrics(self, window_grid, window_label, point_label, inplace=True):
+        TP_FP_mask = (window_grid == point_label)
+        P_mask = (window_label == point_label)
+        assert P_mask.sum() > 0, point_label
 
-        # exit(12)
+        TP_mask = torch.logical_and(TP_FP_mask, P_mask)
+        TP = TP_mask.sum()
 
-        # FN = ((window_grid != point_label) != (window_label != point_label)).sum()
+        TN_FN_mask = window_grid != point_label
+        FN = torch.logical_and(TN_FN_mask, P_mask).sum()
+
+        # dict_masks = {"TP": TP_mask, "TP_FP": TP_FP_mask, "TN_FN_mask": TN_FN_mask, "P": P_mask}
+        # self._plot_masks(dict_masks)
 
         TP_FP = (window_grid == point_label).sum()
-        precision = TP / TP_FP
-        recall = (TP / (TP + FN))
-        f1_score = 2 * (precision * recall) / (precision + recall)
+        precision = TP / (TP_FP + 1e-8)
+        recall = (TP / (TP + FN + 1e-8))
+        f1_score = 2 * (precision * recall) / (precision + recall + 1e-8)
 
-        assert precision <= 1
-        assert recall <= 1
+        assert precision <= 1, precision
+        assert recall <= 1, recall
 
-        self.dict_class_metrics[point_label.cpu().numpy().item()]["prec"].update(precision.cpu().numpy())
-        self.dict_class_metrics[point_label.cpu().numpy().item()]["recall"].update(recall.cpu().numpy())
-        self.dict_class_metrics[point_label.cpu().numpy().item()]["f1_score"].update(f1_score.cpu().numpy())
+        if inplace:
+            self.dict_class_metrics[point_label.cpu().numpy().item()]["prec"].update(precision.cpu().numpy())
+            self.dict_class_metrics[point_label.cpu().numpy().item()]["recall"].update(recall.cpu().numpy())
+            self.dict_class_metrics[point_label.cpu().numpy().item()]["f1_score"].update(f1_score.cpu().numpy())
+        return precision, recall, f1_score
+
+    def _compute_metrics_global(self, grid, label, mask, merged_mask):
+        h, w = label.shape
+
+        set_unique_labels = set((label.flatten()[mask.flatten()]).cpu().numpy())
+
+        label_flat = label.flatten()
+        label_flat[~merged_mask.flatten()] = self.ignore_index
+        label = label_flat.view(h, w)
+
+        for ul in set_unique_labels:
+            prec, recall, f1 = self._compute_metrics(grid, label, ul, inplace=False)
+            self.dict_class_metrics[ul]["prec_g"].update(prec.cpu().numpy())
+            self.dict_class_metrics[ul]["recall_g"].update(recall.cpu().numpy())
+            self.dict_class_metrics[ul]["f1_score_g"].update(f1.cpu().numpy())
+        return
 
     def print(self):
         list_prec, list_recall, list_f1 = list(), list(), list()
+        list_prec_g, list_recall_g, list_f1_g = list(), list(), list()
         for k, v in self.dict_class_metrics.items():
             list_prec.append(v["prec"].avg)
             list_recall.append(v["recall"].avg)
             list_f1.append(v["f1_score"].avg)
-            print("Label {:d} | prec: {:.3f} | recall: {:.3f} | F1 score: {:.3f}"
-                  .format(k, v["prec"].avg, v["recall"].avg, v['f1_score'].avg))
 
-        print("mean prec: {:.3f} | mean recall: {:.3f} | mean F1 score: {:.3f}\n"
-              .format(np.mean(list_prec[:-1]), np.mean(list_recall[:-1]), np.mean(list_f1[:-1])))
+            list_prec_g.append(v["prec_g"].avg)
+            list_recall_g.append(v["recall_g"].avg)
+            list_f1_g.append(v["f1_score_g"].avg)
+
+            print("Label {:d} | prec: {:.3f} | recall: {:.3f} | F1 score: {:.3f} |"
+                  "prec_g: {:.3f} | recall_g: {:.3f} | F1 score_g: {:.3f}"
+                  .format(k, v["prec"].avg, v["recall"].avg, v['f1_score'].avg,
+                          v["prec_g"].avg, v["recall_g"].avg, v['f1_score_g'].avg))
+
+        print("mean prec: {:.3f} | mean recall: {:.3f} | mean F1 score: {:.3f} |"
+              "mean prec_g: {:.3f} | mean recall_g: {:.3f} | mean F1 score_g: {:.3f}\n"
+              .format(np.mean(list_prec[:-1]), np.mean(list_recall[:-1]), np.mean(list_f1[:-1]),
+                      np.mean(list_prec_g[:-1]), np.mean(list_recall_g[:-1]), np.mean(list_f1_g[:-1])))
 
     def write(self, fp):
         with open(fp, 'w') as f:
             list_prec, list_recall, list_f1 = list(), list(), list()
+            list_prec_g, list_recall_g, list_f1_g = list(), list(), list()
+
             for k, v in self.dict_class_metrics.items():
                 list_prec.append(v["prec"].avg)
                 list_recall.append(v["recall"].avg)
                 list_f1.append(v["f1_score"].avg)
-                f.write(f"{k}, {v['prec'].avg}, {v['recall'].avg}, {v['f1_score'].avg}\n")
-            f.write(f"mean, {np.mean(list_prec[:-1])}, {np.mean(list_recall[:-1])}, {np.mean(list_f1[:-1])}\n")
+                list_prec_g.append(v["prec_g"].avg)
+                list_recall_g.append(v["recall_g"].avg)
+                list_f1_g.append(v["f1_score_g"].avg)
+
+                f.write(
+                    f"{k}, {v['prec'].avg}, {v['recall'].avg}, {v['f1_score'].avg}, {v['prec_g'].avg}, {v['recall_g'].avg}, {v['f1_score_g'].avg}\n")
+
+            f.write(
+                f"mean, {np.mean(list_prec[:-1])}, {np.mean(list_recall[:-1])}, {np.mean(list_f1[:-1])}, {np.mean(list_prec_g[:-1])}, {np.mean(list_recall_g[:-1])}, {np.mean(list_f1_g[:-1])}\n")
             f.close()
 
     def reset_metrics(self):
@@ -126,19 +176,6 @@ class LocalSimilarity:
 
     def _baseline(self, window_grid, point_label):
         window_grid.fill_(point_label)
-        return window_grid
-
-    def _basic(self, sim, window_grid, point_label):
-        sim_flat = sim.flatten()
-        sim_flat *= 100
-        sim_flat = torch.round(sim_flat)
-        n_bins = int(2 / self.bin_size)
-        list_bins = torch.arange(-1., 1., 2 / n_bins)
-        hist = torch.histc(sim_flat, bins=n_bins, min=-100, max=100)
-
-        diff = hist[1:] - hist[:-1]
-        threshold = list_bins[torch.where((diff <= 0))[0][-1] + 1]
-        window_grid.flatten()[sim_flat > threshold * 100] = point_label
         return window_grid
 
     def get_window(self, loc, x, window_size):
@@ -172,6 +209,8 @@ class LocalSimilarity:
 
     def _compute_local_similarity(self, emb, y, mask, window_size):
         grid = torch.zeros_like(y).fill_(self.ignore_index)
+        merged_mask = torch.zeros_like(y, dtype=torch.bool)
+
         for p, loc in enumerate(zip(*torch.where(mask))):
             (i, j) = loc
 
@@ -192,9 +231,11 @@ class LocalSimilarity:
                 sim = F.cosine_similarity(point_feature, window_emb, dim=0)
                 window_grid = self._otsu(sim, window_grid, point_label)
             grid[top: top + window_grid.shape[0], left: left + window_grid.shape[1]] = window_grid
+            merged_mask[top: top + window_grid.shape[0], left: left + window_grid.shape[1]] = True
 
             # compute metrics - precision, recall, f1 score
             self._compute_metrics(window_grid, window_label, point_label)
+        self._compute_metrics_global(grid, y, mask, merged_mask)
 
         return grid
 
@@ -259,22 +300,21 @@ if __name__ == '__main__':
     pseudo_labelling = LocalSimilarity(args)
     masks = torch.tensor(np.load("rand_q1.npy")).to(device)
 
-    list_gt_labels = get_gt_labels(dir_annot="/scratch/shared/beegfs/gyungin/datasets/camvid/trainannot")
-    gt_labels = list()
-    for p in list_gt_labels:
-        gt_labels.append(np.array(Image.open(p)))
-    gt_labels = np.array(gt_labels)
-
-    masked_labels = torch.tensor(gt_labels) * masks.cpu()
+    # list_gt_labels = get_gt_labels(dir_annot="/scratch/shared/beegfs/gyungin/datasets/camvid/trainannot")
+    # gt_labels = list()
+    # for p in list_gt_labels:
+    #     gt_labels.append(np.array(Image.open(p)))
+    # gt_labels = np.array(gt_labels)
+    #
+    # masked_labels = torch.tensor(gt_labels) * masks.cpu()
 
     model.eval()
-    for window_size in range(63, 67, 2):
+    for window_size in range(255, 259, 2):
         with torch.no_grad():
             for batch_ind, dict_data in tqdm(enumerate(dataloader)):
                 x, y = dict_data['x'].to(device), dict_data['y'].to(device)
                 b = x.shape[0]
                 mask = masks[batch_ind].unsqueeze(dim=0)
-                # * args.batch_size: (batch_ind + 1) * args.batch_size]
 
                 dict_output = model(x)
                 emb, pred = dict_output["emb"], dict_output["pred"]

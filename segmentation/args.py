@@ -1,4 +1,6 @@
+import os
 from argparse import ArgumentParser
+from pprint import pformat
 
 
 class Arguments:
@@ -16,7 +18,7 @@ class Arguments:
         parser.add_argument("--suffix", type=str, default='')
 
         # active learning
-        parser.add_argument("--active_learning", action="store_true", default=False)
+        # parser.add_argument("--active_learning", action="store_true", default=False)
         parser.add_argument("--n_pixels_per_query", type=int, default=5, help="# pixels for labelling")
         parser.add_argument("--n_pixels_by_us", type=int, default=10, help="# pixels selected by a uncertainty sampling")
         parser.add_argument("--n_epochs_query", type=int, default=20, help="interval between queries in epoch")
@@ -127,7 +129,7 @@ class Arguments:
             args.n_epochs = 50  # 50
 
             args.optimizer_type = "Adam"
-            args.lr_scheduler_type = "Poly"
+            args.lr_scheduler_type = "MultiStepLR"
             assert args.lr_scheduler_type in ["Poly", "MultiStepLR"]
 
             # This params are for Adam
@@ -240,6 +242,7 @@ class Arguments:
         list_keywords.append("ced") if args.use_img_inp and args.use_ced else None
         list_keywords.append("va") if args.use_visual_acuity else None
         list_keywords.append("pseudo") if args.use_pseudo_label else None
+        list_keywords.append(f"{args.labelling_strategy}_k{args.window_size}") if args.use_pseudo_label else None
 
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None
@@ -252,5 +255,11 @@ class Arguments:
 
         # create dirs
         args.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
+        os.makedirs(args.dir_checkpoints, exist_ok=True)
+
+        with open(f"{args.dir_checkpoints}/args.txt", 'w') as f:
+            f.write(pformat(vars(args)))
+            f.close()
+
         print("model name:", args.experim_name)
         return args
