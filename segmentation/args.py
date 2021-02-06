@@ -48,6 +48,7 @@ class Arguments:
         parser.add_argument("--dataset_name", type=str, default="cv", choices=["cs", "cv", "voc"])
         parser.add_argument("--dir_datasets", type=str, default="/scratch/shared/beegfs/gyungin/datasets")
         parser.add_argument("--use_augmented_dataset", action="store_true", default=False, help="whether to use the augmented dataset for pascal voc")
+        parser.add_argument("--downsample", type=int, default=4, help="downsample for Cityscapes training set")
 
         # image inpainting loss
         parser.add_argument("--use_ced", action="store_true", default=False, help="Canny edge detector")
@@ -86,7 +87,6 @@ class Arguments:
         if args.dataset_name == "cs":
             args.batch_size = 8
             args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/cityscapes"
-            args.downsample = 4
             args.ignore_index = 19
             args.mean = [0.28689554, 0.32513303, 0.28389177]
             args.std = [0.18696375, 0.19017339, 0.18720214]
@@ -142,15 +142,15 @@ class Arguments:
 
             args.augmentations = {
                 "geometric": {
-                    "random_hflip": True,  # args.use_aug,
-                    "random_scale": True,  # args.use_aug,
-                    "crop": True  # args.use_aug
+                    "random_hflip": args.use_aug,
+                    "random_scale": args.use_aug,
+                    "crop": args.use_aug
                 },
 
                 "photometric": {
-                    "random_color_jitter": True,  # args.use_aug,
-                    "random_grayscale": True,  # args.use_aug,
-                    "random_gaussian_blur": True  # args.use_aug
+                    "random_color_jitter": args.use_aug,
+                    "random_grayscale": args.use_aug,
+                    "random_gaussian_blur": args.use_aug
                 }
             }
 
@@ -192,6 +192,7 @@ class Arguments:
         # naming
         list_keywords = list()
         list_keywords.append(args.dataset_name)
+        list_keywords.append(f"d{args.downsample}") if args.dataset_name == "cs" else None
         list_keywords.append("aug") if args.use_aug else "None"
 
         list_keywords.append(args.network_name)
@@ -215,21 +216,6 @@ class Arguments:
             if args.use_vl:
                 list_keywords.append("vl")
                 list_keywords.append(str(args.w_vl))
-
-        elif args.model_name == "mp_seg":
-            list_keywords.append("mp_seg")
-            list_keywords.append(f"n_emb_dims_{args.n_emb_dims}")
-
-            args.momentum_prototypes = 0.99
-            args.momentum_radii = 0.99
-
-            if args.use_pl:
-                list_keywords.append("pl")
-                list_keywords.append(str(args.w_pl))
-
-            if args.use_repl:
-                list_keywords.append("repl")
-                list_keywords.append(str(args.w_repl))
 
         # query strategy
         list_keywords.append(f"{args.query_strategy}") if args.n_pixels_by_us > 0 else None
