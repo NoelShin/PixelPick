@@ -47,14 +47,21 @@ class CityscapesDataset(Dataset):
             self.mean_val = tuple((np.array(args.mean) * 255.0).astype(np.uint8).tolist())
             self.ignore_index = args.ignore_index
 
-        self.crop_size = (256, 512)
+        if args.downsample == 2:
+            self.crop_size = (512, 1024)
+
+        elif args.downsample == 4:
+            self.crop_size = (256, 512)
+
+        else:
+            raise ValueError(f"Invalid downsample {args.downsample}")
         self.pad_size = (0, 0)
 
         self.arr_masks = None
 
         n_pixels_per_img = args.n_pixels_by_us
 
-        path_arr_masks = f"{dir_dataset}/init_labelled_pixels_{self.seed}.npy"
+        path_arr_masks = f"{dir_dataset}/init_labelled_pixels_d{args.downsample}_{self.seed}.npy"
         if (args.n_pixels_by_us + args.n_pixels_by_oracle_cb) != 0 and not val:
             if os.path.isfile(path_arr_masks):
                 self.arr_masks = np.load(path_arr_masks)

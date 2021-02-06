@@ -1,5 +1,12 @@
 #!/home/gishin-temp/bin/sh
-python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'margin_sampling' --n_pixels_by_us 10 --seed 0 --use_pseudo_label --debug
+python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cs' --use_softmax --query_strategy 'entropy' --n_pixels_by_us 10 --seed 0 --downsample 2
+
+# python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'entropy' --n_pixels_by_us 10 --seed 1 --use_pseudo_label --window_size 3
+# python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'entropy' --n_pixels_by_us 10 --seed 2 --use_pseudo_label --window_size 3
+# python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'entropy' --n_pixels_by_us 10 --seed 3 --use_pseudo_label --window_size 3
+# python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'entropy' --n_pixels_by_us 10 --seed 4 --use_pseudo_label --window_size 3
+
+
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 2  --suffix '' --use_aug --use_softmax --query_strategy 'random' --use_oracle_cb
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 3  --suffix '' --use_aug --use_softmax --query_strategy 'random' --use_oracle_cb
 #python3 ../main_al.py --n_pixels_per_img 10 --seed 4  --suffix '' --use_aug --use_softmax --query_strategy 'random' --use_oracle_cb
