@@ -85,7 +85,7 @@ class Arguments:
 
         args.stride_total = 8 if args.use_dilated_resnet else 32
         if args.dataset_name == "cs":
-            args.batch_size = 8
+            args.batch_size = 4
             args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/cityscapes"
             args.ignore_index = 19
             args.mean = [0.28689554, 0.32513303, 0.28389177]
