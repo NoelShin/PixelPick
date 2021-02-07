@@ -1,5 +1,5 @@
 #!/home/gishin-temp/bin/sh
-python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cs' --use_softmax --query_strategy 'entropy' --n_pixels_by_us 10 --seed 0 --downsample 2
+python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'random' --n_pixels_by_us 10 --seed 0 --use_contrastive_loss --debug
 
 # python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'entropy' --n_pixels_by_us 10 --seed 1 --use_pseudo_label --window_size 3
 # python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'entropy' --n_pixels_by_us 10 --seed 2 --use_pseudo_label --window_size 3

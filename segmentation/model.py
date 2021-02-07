@@ -16,6 +16,7 @@ from utils.metrics import prediction, eval_metrics
 from utils.utils import get_dataloader, get_criterion, get_optimizer, get_lr_scheduler, get_validator, AverageMeter
 from utils.utils import write_log, send_file, Visualiser, zip_dir
 from al_selectors.query import QuerySelector
+from criterions.contrastive_loss import get_dict_label_projection, compute_contrastive_loss
 
 
 class Model:
@@ -79,6 +80,13 @@ class Model:
         self.use_pseudo_label = args.use_pseudo_label
         self.window_size = args.window_size
 
+        self.use_contrastive_loss = args.use_contrastive_loss
+        self.use_region_contrast = args.use_region_contrast
+        self.w_contrastive = args.w_contrastive
+        self.selection_mode = args.selection_mode
+        self.temperature = args.temperature
+        self.dict_label_projection = None
+
     def __call__(self):
         # fully-supervised model
         if self.n_pixels_per_query == 0:
@@ -96,7 +104,7 @@ class Model:
             send_file(zip_file, file_name=f"{self.experim_name}", remove_file=True)
         # active learning model
         else:
-            for nth_query in range(self.max_budget // self.n_pixels_per_query + 1):
+            for nth_query in range(self.max_budget // self.n_pixels_per_query):
                 dir_checkpoints = f"{self.dir_checkpoints}/{nth_query}_query"
                 self.log_train = f"{dir_checkpoints}/log_train.txt"
                 self.log_val = f"{dir_checkpoints}/log_val.txt"
@@ -106,11 +114,12 @@ class Model:
                 write_log(f"{self.log_val}", header=["epoch", "mIoU", "pixel_acc"])
 
                 self.nth_query = nth_query
+
                 model = self._train()
 
                 # zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=False)
                 # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
-                if nth_query == (self.max_budget // self.n_pixels_per_query) or self.n_pixels_per_img == 0:
+                if nth_query == (self.max_budget // self.n_pixels_per_query) - 1 or self.n_pixels_per_img == 0:
                     break
 
                 # select queries using the current model and label them.
@@ -119,18 +128,22 @@ class Model:
 
                 # pseudo-labelling based on the current labels
                 if self.use_pseudo_label:
-                    self.dataloader.dataset.update_pseudo_label(model, window_size=self.window_size, nth_query=nth_query + 1)
+                    self.dataloader.dataset.update_pseudo_label(model, window_size=self.window_size, nth_query=nth_query+1)
+
+                if self.use_contrastive_loss:
+                    self.dict_label_projection = get_dict_label_projection(self.dataloader_query, model,
+                                                                           arr_masks=self.dataloader.dataset.arr_masks,
+                                                                           ignore_index=self.ignore_index,
+                                                                           region_contrast=self.use_region_contrast)
 
         # rmtree(f"{self.dir_checkpoints}")
         return
 
-    def _train_epoch(self, epoch, model, optimizer, lr_scheduler, prototypes=None):
+    def _train_epoch(self, epoch, model, optimizer, lr_scheduler, prototypes=None, dict_label_projection=None):
         if self.n_pixels_per_img != 0:
             print(f"training an epoch {epoch} of {self.nth_query}th query ({self.dataloader.dataset.arr_masks.sum()} labelled pixels)")
         log = f"{self.log_train}"
         fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
-        # log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_train.txt"
-        # fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
 
         model.train()
         dataloader_iter = iter(self.dataloader)
@@ -184,6 +197,15 @@ class Model:
                 prob = F.softmax(-dist.detach(), dim=1)
 
                 dict_losses = self.criterion(dict_outputs, prototypes, labels=y)
+
+            if self.use_contrastive_loss and self.n_pixels_per_img != 0 and self.nth_query > 0:
+                projection = dict_outputs["projection"]
+                loss_cont = compute_contrastive_loss(projection, y, mask,
+                                                     dict_label_projection=self.dict_label_projection,
+                                                     selection_mode=self.selection_mode,
+                                                     temperature=self.temperature)
+
+                dict_losses.update({"loss_cont": self.w_contrastive * loss_cont})
 
             loss = torch.tensor(0., dtype=torch.float32).to(self.device)
 
@@ -256,17 +278,26 @@ class Model:
                                      learnable=self.model_name == "gcpl_seg",
                                      device=self.device) if not self.use_softmax else None
 
+        # if self.use_contrastive_loss and self.nth_query == 0:
+        #     self.dict_label_projection = get_dict_label_projection(self.dataloader_query, model,
+        #                                                       arr_masks=self.dataloader.dataset.arr_masks,
+        #                                                       ignore_index=self.ignore_index,
+        #                                                       region_contrast=self.use_region_contrast)
+
         optimizer = get_optimizer(self.args, model, prototypes=prototypes)
         lr_scheduler = get_lr_scheduler(self.args, optimizer=optimizer, iters_per_epoch=len(self.dataloader))
 
         for e in range(1, 1 + self.n_epochs):
-            model, optimizer, lr_scheduler, prototypes = self._train_epoch(e, model, optimizer, lr_scheduler, prototypes)
+            model, optimizer, lr_scheduler, prototypes = self._train_epoch(e, model, optimizer, lr_scheduler,
+                                                                           prototypes=prototypes,
+                                                                           dict_label_projection=self.dict_label_projection)
 
             # if type(lr_scheduler, )
             # lr_scheduler.step(e)
             self._val(e, model, prototypes)
             if self.debug:
                 break
+
         self.best_miou = -1.0
         return model
 

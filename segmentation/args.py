@@ -34,6 +34,13 @@ class Arguments:
         parser.add_argument("--labelling_strategy", type=str, default="local_sim")
         parser.add_argument("--window_size", type=int, default=5)
 
+        # contrastive loss
+        parser.add_argument("--use_contrastive_loss", action='store_true', default=False)
+        parser.add_argument("--use_region_contrast", action='store_true', default=False)
+        parser.add_argument("--selection_mode", type=str, default="hard")
+        parser.add_argument("--temperature", type=float, default=1.0)
+        parser.add_argument("--w_contrastive", type=float, default=0.1)
+
         # QBC
         parser.add_argument("--use_mc_dropout", action="store_true", default=False)
         parser.add_argument("--mc_dropout_p", type=float, default=0.2)
@@ -85,7 +92,7 @@ class Arguments:
 
         args.stride_total = 8 if args.use_dilated_resnet else 32
         if args.dataset_name == "cs":
-            args.batch_size = 8
+            args.batch_size = 4
             args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/cityscapes"
             args.ignore_index = 19
             args.mean = [0.28689554, 0.32513303, 0.28389177]
@@ -229,6 +236,10 @@ class Arguments:
         list_keywords.append("va") if args.use_visual_acuity else None
         list_keywords.append("pseudo") if args.use_pseudo_label else None
         list_keywords.append(f"{args.labelling_strategy}_k{args.window_size}") if args.use_pseudo_label else None
+
+        if args.use_contrastive_loss:
+            list_keywords.append(f"{args.selection_mode}_w{args.w_contrastive}_t{args.temperature}")
+            list_keywords.append(f"reg") if args.use_region_contrast else None
 
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None
