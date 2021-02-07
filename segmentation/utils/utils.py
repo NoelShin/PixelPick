@@ -101,6 +101,11 @@ def get_optimizer(args, model, prototypes=None):
                              'lr': optimizer_params['lr'],
                              'weight_decay': optimizer_params['weight_decay']}]
 
+        if args.use_contrastive_loss:
+            list_params += [{'params': model.projection_head.parameters(),
+                             'lr': optimizer_params['lr'],
+                             'weight_decay': optimizer_params['weight_decay']}]
+
         optimizer = Adam(list_params)
 
     elif args.dataset_name == "cv":
@@ -136,6 +141,12 @@ def get_optimizer(args, model, prototypes=None):
                                  'lr': 1e-2,
                                  'weight_decay': 5e-4,
                                  'momentum': 0.9}]
+
+                # if args.use_contrastive_loss:
+                #     list_params += [{'params': model.projection_head.parameters(),
+                #                      'lr': 1e-2,
+                #                      'weight_decay': 5e-4,
+                #                      'momentum': 0.9}]
             optimizer = SGD(list_params)
 
         elif args.optimizer_type == "Adam":
@@ -164,6 +175,11 @@ def get_optimizer(args, model, prototypes=None):
                 list_params += [{'params': model.seg_head.parameters(),
                                  'lr': optimizer_params['lr'],
                                  'weight_decay': optimizer_params['weight_decay']}]
+
+                # if args.use_contrastive_loss:
+                #     list_params += [{'params': model.projection_head.parameters(),
+                #                      'lr': optimizer_params['lr'],
+                #                      'weight_decay': optimizer_params['weight_decay']}]
 
             if prototypes is not None:
                 list_params += [{'params': prototypes,

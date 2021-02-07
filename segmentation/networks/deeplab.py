@@ -32,6 +32,16 @@ class DeepLab(nn.Module):
         # segment
         self.seg_head = SegmentHead(args)
 
+        self.use_contrastive_loss = args.use_contrastive_loss
+        if self.use_contrastive_loss:
+            self.projection_head = nn.Sequential(
+                nn.Conv2d(304, 256, 1, bias=False),
+                nn.BatchNorm2d(256),
+                nn.ReLU(True),
+                nn.Conv2d(256, 256, 1, bias=False),
+                nn.BatchNorm2d(256)
+            )
+
         # error mask -> difficulty branch
         self.with_mask = with_mask
         self.branch_early = branch_early
@@ -54,8 +64,6 @@ class DeepLab(nn.Module):
                 m.train()
 
     def forward(self, inputs):
-        dict_outputs = dict()
-
         backbone_feat, low_level_feat = self.backbone(inputs)  # 1/16, 1/4;
         x = self.aspp(backbone_feat)  # 1/16 -> aspp -> 1/16
 
@@ -66,6 +74,11 @@ class DeepLab(nn.Module):
 
         # segment
         dict_outputs = self.seg_head(second_to_last_features)
+        if self.use_contrastive_loss:
+            projection = self.projection_head(second_to_last_features)
+            projection = F.interpolate(projection, size=inputs.size()[2:], mode='bilinear', align_corners=True)
+            dict_outputs.update({"projection": projection})
+
         if self.with_mask:
             if self.branch_early:
                 mask, attention = self.mask_head(second_to_last_features)  # 1/4 features same to seg_head
