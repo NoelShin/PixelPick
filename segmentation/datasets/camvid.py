@@ -52,7 +52,7 @@ class CamVidDataset(Dataset):
 
         path_arr_masks = f"{args.dir_dataset}/{mode}/init_labelled_pixels_{self.seed}.npy"
         if (args.n_pixels_by_us + args.n_pixels_by_oracle_cb) != 0 and not val:
-            if os.path.isfile(path_arr_masks):
+            if os.path.isfile(path_arr_masks) and False:
                 self.arr_masks = np.load(path_arr_masks)
             else:
                 np.random.seed(self.seed)

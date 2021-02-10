@@ -35,13 +35,13 @@ class QuerySelector:
         self.use_mc_dropout = args.use_mc_dropout
         self.vote_type = args.vote_type
 
-    def __call__(self, nth_query):
-        state_dict = torch.load(f"{self.dir_checkpoints}/{nth_query}_query/best_miou_model.pt")
-        if self.network_name == "FPN":
-            model = FPNSeg(self.args).to(self.device)
-        else:
-            model = DeepLab(self.args).to(self.device)
-        model.load_state_dict(state_dict["model"])
+    def __call__(self, nth_query, model=None):
+        # state_dict = torch.load(f"{self.dir_checkpoints}/{nth_query}_query/best_miou_model.pt")
+        # if self.network_name == "FPN":
+        #     model = FPNSeg(self.args).to(self.device)
+        # else:
+        #     model = DeepLab(self.args).to(self.device)
+        # model.load_state_dict(state_dict["model"])
 
         if not self.use_softmax:
             prototypes = state_dict["prototypes"].to(self.device)
@@ -191,7 +191,7 @@ class QuerySelector:
                         dict_outputs = model(x)
 
                         if self.use_softmax:
-                            prob = dict_outputs["pred"]
+                            prob = F.softmax(dict_outputs["pred"], dim=1)
 
                         else:
                             emb = dict_outputs['emb']  # b x n_emb_dims x h x w
@@ -293,6 +293,7 @@ class QuerySelector:
 
         elif self.n_pixels_by_oracle_cb > 0:
             selected_queries = grid_oracle_cb
+
         else:
             raise NotImplementedError
 

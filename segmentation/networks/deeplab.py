@@ -63,6 +63,11 @@ class DeepLab(nn.Module):
             if isinstance(m, torch.nn.Dropout):
                 m.train()
 
+    def turn_off_dropout(self):
+        for m in self.modules():
+            if isinstance(m, torch.nn.Dropout):
+                m.eval()
+
     def forward(self, inputs):
         backbone_feat, low_level_feat = self.backbone(inputs)  # 1/16, 1/4;
         x = self.aspp(backbone_feat)  # 1/16 -> aspp -> 1/16

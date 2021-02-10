@@ -29,6 +29,10 @@ class Arguments:
 
         parser.add_argument("--n_pixels_by_oracle_cb", type=int, default=0)
 
+        parser.add_argument("--hardness", type=int, default=2)
+        parser.add_argument("--hardness2_n_pixels", type=int, default=10)
+        parser.add_argument("--nth_query", type=int, default=1)
+
         # semi-supervised learning
         parser.add_argument("--use_pseudo_label", action="store_true", default=False, help="use pseudo-labelling")
         parser.add_argument("--labelling_strategy", type=str, default="local_sim")
@@ -84,6 +88,7 @@ class Arguments:
         parser.add_argument("--weight_type", type=str, default="supervised",
                             choices=["random", "supervised", "moco_v2", "swav", "deepcluster_v2"])
         parser.add_argument("--use_dilated_resnet", type=bool, default=True, help="whether to use dilated resnet")
+        parser.add_argument("--n_layers", type=int, default=50, choices=[18, 34, 50, 101], help="encoder (resnet) depth")
 
         self.parser = parser
 
@@ -149,15 +154,15 @@ class Arguments:
 
             args.augmentations = {
                 "geometric": {
-                    "random_hflip": args.use_aug,
-                    "random_scale": args.use_aug,
-                    "crop": args.use_aug
+                    "random_hflip": True,  # args.use_aug,
+                    "random_scale": True,  # args.use_aug,
+                    "crop": True  # args.use_aug
                 },
 
                 "photometric": {
-                    "random_color_jitter": args.use_aug,
-                    "random_grayscale": args.use_aug,
-                    "random_gaussian_blur": args.use_aug
+                    "random_color_jitter": True,  # args.use_aug,
+                    "random_grayscale": True,  # args.use_aug,
+                    "random_gaussian_blur": True  #args.use_aug
                 }
             }
 
@@ -203,6 +208,7 @@ class Arguments:
         list_keywords.append("aug") if args.use_aug else "None"
 
         list_keywords.append(args.network_name)
+        list_keywords.append(f"{args.n_layers}") if args.network_name == "FPN" else None
 
         if args.use_softmax:
             list_keywords.append("sm")

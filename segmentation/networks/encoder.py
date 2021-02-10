@@ -9,16 +9,24 @@ resnet50 = {
     "swav": "../networks/backbones/pretrained/swav_800ep_pretrain.pth.tar"
 }
 
+resnet = {
+    18: "../networks/backbones/pretrained/resnet18-pytorch.pth",
+    34: "../networks/backbones/pretrained/resnet34-pytorch.pth",
+    50: "../networks/backbones/pretrained/resnet50-pytorch.pth",
+    101: "../networks/backbones/pretrained/resnet101-pytorch.pth"
+}
+
 
 class Encoder(nn.Module):
     def __init__(self, args):
         super(Encoder, self).__init__()
-
         weight_type = args.weight_type
         use_dilated_resnet = args.use_dilated_resnet
+        n_layers = args.n_layers
 
         if weight_type == "supervised":
-            self.base = ResNetBackbone(backbone='resnet50_dilated8', pretrained=resnet50[weight_type])
+            self.base = ResNetBackbone(backbone=f'resnet{n_layers}_dilated8', pretrained=resnet[n_layers])
+            # pretrained=resnet50[weight_type])
 
         else:
             if use_dilated_resnet:
