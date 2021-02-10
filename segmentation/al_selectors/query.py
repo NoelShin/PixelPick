@@ -191,7 +191,7 @@ class QuerySelector:
                         dict_outputs = model(x)
 
                         if self.use_softmax:
-                            prob = dict_outputs["pred"]
+                            prob = F.softmax(dict_outputs["pred"], dim=1)
 
                         else:
                             emb = dict_outputs['emb']  # b x n_emb_dims x h x w

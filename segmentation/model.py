@@ -100,7 +100,7 @@ class Model:
 
             self._train()
 
-            zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=False)
+            zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
             send_file(zip_file, file_name=f"{self.experim_name}", remove_file=True)
         # active learning model
         else:
