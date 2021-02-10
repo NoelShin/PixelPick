@@ -33,7 +33,6 @@ class LocalSimilarity:
                                         'f1_score_g': AverageMeter()
                                        } for c in range(12)}
 
-
     def _partition(self, points):
         ind_points = np.where(points)
         arr_h = np.expand_dims(np.array(range(self.h), np.int32), axis=1).repeat(self.w, axis=1)
@@ -284,7 +283,7 @@ class LocalSimilarity:
             sim = F.cosine_similarity(emb_point, emb_rec, dim=0)  # window_size x window_size
 
             mask_rec = torch.tensor(mask_rec).to(device)
-            window = torch.zeros_like(mask_rec, dtype=torch.long).fill_(self.ignore_index)  # window_size x window_siz
+            window = torch.zeros_like(mask_rec, dtype=torch.long).fill_(self.ignore_index)  # window_size x window_size
             thres, window_binary = self._otsu(sim)
             window_binary = torch.from_numpy(window_binary).to(device, torch.bool)
             window[torch.logical_and(mask_rec, window_binary)] = y_point

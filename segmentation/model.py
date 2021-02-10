@@ -48,6 +48,7 @@ class Model:
                                                shuffle=False, batch_size=1, n_workers=args.n_workers)
         self.dataloader_val = get_dataloader(args, val=True, query=False,
                                              shuffle=False, batch_size=1, n_workers=args.n_workers)
+
         if args.network_name == "FPN":
             self.model = FPNSeg(args).to(self.device)
         else:
@@ -117,13 +118,13 @@ class Model:
 
                 model = self._train()
 
-                zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=False)
+                zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
                 send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
-                if nth_query == (self.max_budget // self.n_pixels_per_query) - 1 or self.n_pixels_per_img == 0:
+                if nth_query == (self.max_budget // self.n_pixels_per_query) - 1 or self.n_pixels_per_img == 0 or nth_query == 9:
                     break
 
                 # select queries using the current model and label them.
-                queries = self.query_selector(nth_query)
+                queries = self.query_selector(nth_query, model)
                 self.dataloader.dataset.label_queries(queries, nth_query + 1)
 
                 # pseudo-labelling based on the current labels

@@ -9,11 +9,24 @@ class FPNDecoder(nn.Module):
         n_classes = args.n_classes
         use_softmax = args.use_softmax
         use_img_inp = args.use_img_inp
+        if args.n_layers in [18, 34]:
+            n_ch_0 = 512
+            n_ch_1 = 256
+            n_ch_2 = 128
+            n_ch_3 = 64
 
-        self.lat_layer_0 = nn.Conv2d(2048, 256, 1)
-        self.lat_layer_1 = nn.Conv2d(1024, 256, 1)
-        self.lat_layer_2 = nn.Conv2d(512, 256, 1)
-        self.lat_layer_3 = nn.Conv2d(256, 256, 1)
+        elif args.n_layers == 50:
+            n_ch_0 = 2048
+            n_ch_1 = 1024
+            n_ch_2 = 512
+            n_ch_3 = 256
+        else:
+            raise ValueError(args.n_layers)
+
+        self.lat_layer_0 = nn.Conv2d(n_ch_0, 256, 1)
+        self.lat_layer_1 = nn.Conv2d(n_ch_1, 256, 1)
+        self.lat_layer_2 = nn.Conv2d(n_ch_2, 256, 1)
+        self.lat_layer_3 = nn.Conv2d(n_ch_3, 256, 1)
 
         self.upsample_blocks_0 = nn.Sequential(
             UpsampleBlock(256, 128),
