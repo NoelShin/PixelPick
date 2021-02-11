@@ -75,11 +75,12 @@ class Arguments:
         parser.add_argument("--n_prototypes", type=int, default=1)
         parser.add_argument("--loss_type", type=str, default="dce", choices=["dce"])
         parser.add_argument("--use_pl", action="store_true", default=False, help="prototype loss")
-        parser.add_argument("--w_pl", type=float, default=1, help="weight for prototype loss")
+        parser.add_argument("--w_pl", type=float, default=1.0, help="weight for prototype loss")
         parser.add_argument("--use_repl", action="store_true", default=False, help="repulsive loss")
         parser.add_argument("--w_repl", type=float, default=1, help="weight for repulsive loss")
         parser.add_argument("--use_vl", action="store_true", default=False, help="prototype loss")
         parser.add_argument("--w_vl", type=float, default=1, help="weight for prototype loss")
+        parser.add_argument("--use_openset", action="store_true", default=False, help="ignore_bg of voc datasets")
 
         parser.add_argument("--non_isotropic", action="store_true", default=False)
         parser.add_argument("--n_emb_dims", type=int, default=32)
@@ -134,6 +135,7 @@ class Arguments:
         elif args.dataset_name == "cv":
             args.batch_size = 4
             args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/camvid"
+            args.downsample = 1
             args.ignore_index = 11
             args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
             args.std = [0.27413549931506, 0.28506257482912, 0.28284674400252]

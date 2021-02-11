@@ -42,6 +42,18 @@ class DeepLab(nn.Module):
                 nn.BatchNorm2d(256)
             )
 
+        self.use_openset = args.use_openset
+        if self.use_openset:
+            self.aspp_ = ASPP(backbone, output_stride, nn.BatchNorm2d)
+
+            # low level features
+            low_level_inplanes = 24
+            self.low_level_conv_ = nn.Sequential(nn.Conv2d(low_level_inplanes, 48, 1, bias=False),
+                                                nn.BatchNorm2d(48),
+                                                nn.ReLU())
+            # segment
+            self.seg_head_ = SegmentHead(args, openset=True)
+
         # error mask -> difficulty branch
         self.with_mask = with_mask
         self.branch_early = branch_early
@@ -73,9 +85,9 @@ class DeepLab(nn.Module):
         x = self.aspp(backbone_feat)  # 1/16 -> aspp -> 1/16
 
         # low + high features
-        low_level_feat = self.low_level_conv(low_level_feat)  # 256->48
-        x = F.interpolate(x, size=low_level_feat.size()[2:], mode='bilinear', align_corners=True)  # 1/4
-        second_to_last_features = torch.cat((x, low_level_feat), dim=1)  # 304 = 256 + 48
+        low_level_feat_ = self.low_level_conv(low_level_feat)  # 256->48
+        x = F.interpolate(x, size=low_level_feat_.size()[2:], mode='bilinear', align_corners=True)  # 1/4
+        second_to_last_features = torch.cat((x, low_level_feat_), dim=1)  # 304 = 256 + 48
 
         # segment
         dict_outputs = self.seg_head(second_to_last_features)
@@ -98,20 +110,26 @@ class DeepLab(nn.Module):
             else:
                 return pred, mask
         else:
-            if self.use_img_inp or self.use_visual_acuity:
-                img_inp = dict_outputs["img_inp"]
-                img_inp = F.interpolate(img_inp, size=inputs.size()[2:], mode='bilinear', align_corners=True)
-                dict_outputs['img_inp'] = img_inp
+            pred = dict_outputs['pred']
+            pred = F.interpolate(pred, size=inputs.size()[2:], mode='bilinear', align_corners=True)
+            dict_outputs['pred'] = pred
 
-            if self.use_softmax:
-                pred = dict_outputs['pred']
-                pred = F.interpolate(pred, size=inputs.size()[2:], mode='bilinear', align_corners=True)
-                dict_outputs['pred'] = pred
+            emb = dict_outputs['emb']
+            emb = F.interpolate(emb, size=inputs.size()[2:], mode='bilinear', align_corners=True)
+            dict_outputs['emb'] = emb
 
-            else:
-                emb = dict_outputs['emb']
-                emb = F.interpolate(emb, size=inputs.size()[2:], mode='bilinear', align_corners=True)
-                dict_outputs['emb'] = emb
+            if self.use_openset:
+                x = self.aspp_(backbone_feat)  # 1/16 -> aspp -> 1/16
+
+                # low + high features
+                low_level_feat_ = self.low_level_conv_(low_level_feat)  # 256->48
+                x = F.interpolate(x, size=low_level_feat_.size()[2:], mode='bilinear', align_corners=True)  # 1/4
+                second_to_last_features = torch.cat((x, low_level_feat_), dim=1)  # 304 = 256 + 48
+
+                dict_outputs_ = self.seg_head_(second_to_last_features)
+                emb_ = dict_outputs_["emb"]
+                dict_outputs.update({"emb_": F.interpolate(emb_, size=inputs.size()[2:],
+                                                           mode='bilinear', align_corners=True)})
 
             if self.return_features:
                 return dict_outputs

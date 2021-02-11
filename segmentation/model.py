@@ -78,6 +78,8 @@ class Model:
         self.use_visual_acuity = args.use_visual_acuity
         self.w_visual_acuity = args.w_visual_acuity
 
+        self.use_openset = args.use_openset
+
         self.use_pseudo_label = args.use_pseudo_label
         self.window_size = args.window_size
 
@@ -116,7 +118,7 @@ class Model:
 
                 self.nth_query = nth_query
 
-                model = self._train()
+                model, prototypes = self._train()
 
                 # zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
                 # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
@@ -167,17 +169,18 @@ class Model:
             # forward pass
             dict_outputs = model(x)
 
-            if self.use_softmax:
-                logits = dict_outputs["pred"]
-                dict_losses = {"ce": F.cross_entropy(logits, y, ignore_index=self.ignore_index)}
-                pred = logits.argmax(dim=1)  # for computing mIoU, pixel acc.
-                prob = F.softmax(logits.detach(), dim=1)
+            logits = dict_outputs["pred"]
+            dict_losses = {"ce": F.cross_entropy(logits, y, ignore_index=self.ignore_index)}
+            pred = logits.argmax(dim=1)  # for computing mIoU, pixel acc.
+            prob = F.softmax(logits.detach(), dim=1)
 
-                if self.use_pseudo_label and self.nth_query > 0:
-                    dict_losses.update({"ce_pseudo": F.cross_entropy(logits, y_pseudo, ignore_index=self.ignore_index)})
+            if self.use_pseudo_label and self.nth_query > 0:
+                dict_losses.update({"ce_pseudo": F.cross_entropy(logits, y_pseudo, ignore_index=self.ignore_index)})
 
-            else:
-                emb = dict_outputs['emb']  # b x n_emb_dims x h x w
+            if self.use_openset:
+                emb = dict_outputs['emb_']  # b x n_emb_dims x h x w
+
+                emb = emb / torch.linalg.norm(emb, ord=2, dim=1, keepdim=True)
 
                 b, c, h, w = emb.shape
                 emb_flatten = emb.transpose(1, 0)  # c x b x h x w
@@ -194,10 +197,12 @@ class Model:
                     dict_label_emb.update({label: emb_label})
 
                 dict_outputs.update({"dict_label_emb": dict_label_emb})
-                pred, dist = prediction(emb.detach(), prototypes.detach(), return_distance=True)
-                prob = F.softmax(-dist.detach(), dim=1)
+                _, dist = prediction(emb.detach(), prototypes.detach(), return_distance=True)
 
-                dict_losses = self.criterion(dict_outputs, prototypes, labels=y)
+                prob_ = F.softmax(-dist.detach(), dim=1)
+                # pred = (prob + prob_).argmax(dim=1)  # ensemble
+
+                dict_losses.update(self.criterion(dict_outputs, prototypes, labels=y))
 
             if self.use_contrastive_loss and self.n_pixels_per_img != 0 and self.nth_query > 0:
                 projection = dict_outputs["projection"]
@@ -274,10 +279,10 @@ class Model:
         prototypes = init_prototypes(self.n_classes, self.n_emb_dims, self.n_prototypes,
                                      mode='mean',
                                      model=self.model,
-                                     dataset=self.dataloader.dataset,
+                                     dataset=self.dataloader_query.dataset,
                                      ignore_index=self.ignore_index,
                                      learnable=self.model_name == "gcpl_seg",
-                                     device=self.device) if not self.use_softmax else None
+                                     device=self.device) if self.use_openset else None
 
         # if self.use_contrastive_loss and self.nth_query == 0:
         #     self.dict_label_projection = get_dict_label_projection(self.dataloader_query, model,
@@ -300,7 +305,7 @@ class Model:
                 break
 
         self.best_miou = -1.0
-        return model
+        return model, prototypes
 
     def _val(self, epoch, model, prototypes=None):
         # log = f"{self.dir_checkpoints}/{self.nth_query}_query/log_val.txt"
@@ -329,19 +334,16 @@ class Model:
                 else:
                     dict_outputs = model(x)
 
-                if self.use_softmax:
-                    logits = dict_outputs['pred']
-                    pred = logits.argmax(dim=1)
-                    prob = F.softmax(logits.detach(), dim=1)
+                logits = dict_outputs['pred']
+                pred = logits.argmax(dim=1)
+                prob = F.softmax(logits.detach(), dim=1)
 
-                else:
-                    emb = dict_outputs['emb']
-                    pred, dist = prediction(emb, prototypes, return_distance=True)
-                    prob = F.softmax(-dist, dim=1)
+                if self.use_openset:
+                    emb = dict_outputs['emb_']
+                    _, dist = prediction(emb, prototypes, return_distance=True)
+                    prob_ = F.softmax(-dist, dim=1)
 
-                    if self.dataset_name == "voc":
-                        pred.flatten()[prob.flatten() < 0.5] = -1
-                        pred += 1
+                    # pred = (prob + prob_).argmax(dim=1)
 
                 # b x h x w
                 correct, labeled, inter, union = eval_metrics(pred, y, self.n_classes, self.ignore_index)
@@ -365,7 +367,7 @@ class Model:
             state_dict = dict()
             state_dict_model = model.state_dict()
             state_dict.update({"model": state_dict_model})
-            if not self.use_softmax:
+            if self.use_openset:
                 # state_dict_prototypes = prototypes.state_dict()
                 state_dict.update({"prototypes": prototypes.cpu()})
 

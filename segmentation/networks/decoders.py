@@ -116,7 +116,7 @@ class UpsampleBlock(nn.Module):
 
 
 class SegmentHead(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, openset=False):
         super(SegmentHead, self).__init__()
         self.segment_head = nn.Sequential(nn.Conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
                                           nn.BatchNorm2d(256),  # 304=256+48
@@ -128,37 +128,28 @@ class SegmentHead(nn.Module):
                                           nn.Dropout(args.mc_dropout_p))  # , constants.MC_DROPOUT_RATE),  # MC dropout
                                           # nn.Conv2d(256, args.n_classes, kernel_size=1, stride=1))
 
-        if args.use_softmax:
-            self.classifier = nn.Conv2d(256, args.n_classes, 1)
-
-        else:
+        if openset:
             self.fc = nn.Conv2d(256, args.n_emb_dims, 1)
-
-        if args.use_img_inp or args.use_visual_acuity:
-            self.fc_img_inp = nn.Conv2d(256, 3, 1)
+        else:
+            self.classifier = nn.Conv2d(256, args.n_classes, 1)
 
         self._init_weight()
 
         self.n_classes = args.n_classes
-        self.use_img_inp = args.use_img_inp
-        self.use_visual_acuity = args.use_visual_acuity
 
         self.use_softmax = args.use_softmax
+        self.openset = openset
 
     def forward(self, x):
         dict_outputs = {}
         emb = self.segment_head(x)
-        if self.use_img_inp or self.use_visual_acuity:
-            img_inp = self.fc_img_inp(emb)
-            dict_outputs.update({"img_inp": img_inp})
 
-        if self.use_softmax:
-            pred = self.classifier(emb)
-            dict_outputs.update({"emb": emb, "pred": pred})
-
-        else:
+        if self.openset:
             emb = self.fc(emb)
-            dict_outputs.update({"emb": emb})
+        else:
+            pred = self.classifier(emb)
+            dict_outputs.update({"pred": pred})
+        dict_outputs.update({"emb": emb})
         return dict_outputs
 
     def _init_weight(self):

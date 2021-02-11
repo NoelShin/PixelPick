@@ -22,6 +22,7 @@ class CamVidDataset(Dataset):
         assert os.path.isdir(args.dir_dataset), f"{args.dir_dataset} does not exist."
         self.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu:0")
+        self.downsample = args.downsample
         self.seed = args.seed
 
         mode = "test" if val else "train"
@@ -43,28 +44,30 @@ class CamVidDataset(Dataset):
             self.mean_val = tuple((np.array(args.mean) * 255.0).astype(np.uint8).tolist())
             self.ignore_index = args.ignore_index
 
-        self.crop_size = (360, 480)
+        self.crop_size = (360 // self.downsample, 480 // self.downsample)
         self.pad_size = (0, 0)
 
         self.arr_masks = None
 
         n_pixels_per_img = args.n_pixels_by_us
 
-        path_arr_masks = f"{args.dir_dataset}/{mode}/init_labelled_pixels_{self.seed}.npy"
+        path_arr_masks = f"{args.dir_dataset}/{mode}/init_labelled_pixels_d{self.downsample}_{self.seed}.npy"
         if (args.n_pixels_by_us + args.n_pixels_by_oracle_cb) != 0 and not val:
             if os.path.isfile(path_arr_masks) and False:
                 self.arr_masks = np.load(path_arr_masks)
             else:
                 np.random.seed(self.seed)
-                label = Image.open(self.list_labels[0])  # .convert("RGB")
+                label = Image.open(self.list_labels[0])
 
                 list_masks = list()
 
                 w, h = label.size
+                w, h = w // self.downsample, h // self.downsample
                 n_pixels_per_img = h * w if n_pixels_per_img == 0 else n_pixels_per_img
 
                 for i in tqdm(range(len(self.list_labels))):
-                    label = np.array(Image.open(self.list_labels[i]))  # H x W
+                    label = Image.open(self.list_labels[i]).resize((w, h), Image.NEAREST)  # H x W
+                    label = np.array(label)  # H x W
                     ind_non_void_pixels = np.where(label.flatten() != self.ignore_index)[0]
                     ind_chosen_pixels = np.random.choice(ind_non_void_pixels, n_pixels_per_img, replace=False)
 
@@ -277,6 +280,9 @@ class CamVidDataset(Dataset):
         dict_data = dict()
 
         x, y = Image.open(self.list_inputs[ind]).convert("RGB"), Image.open(self.list_labels[ind])
+        x = x.resize((self.crop_size[1], self.crop_size[0]), Image.BILINEAR)
+        y = y.resize((self.crop_size[1], self.crop_size[0]), Image.NEAREST)
+
         if self.pseudo_label_flag:
             y_pseudo = Image.fromarray(self.pseudo_labels[ind])
         else:

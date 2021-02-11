@@ -1,5 +1,5 @@
 #!/home/gishin-temp/bin/sh
-python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'random' --n_pixels_by_us 10 --seed 0 --n_layers 18 --network_name "FPN" --debug
+python3 ../main_al.py  --suffix 'test' --use_aug --dataset_name 'cv' --use_openset --use_pl --query_strategy 'random' --n_emb_dims 128 --n_pixels_by_us 10 --seed 0
 
 # python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'margin_sampling' --n_pixels_by_us 10 --seed 0 --use_contrastive_loss --w_contrastive 0.01
 # python3 ../main_al.py  --suffix '' --use_aug --dataset_name 'cv' --use_softmax --query_strategy 'margin_sampling' --n_pixels_by_us 10 --seed 0 --use_contrastive_loss --temperature 0.1 --selection_mode "random"

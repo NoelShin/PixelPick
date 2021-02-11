@@ -37,13 +37,14 @@ def init_prototypes(n_classes, n_emb_dims,
                                 shuffle=True,
                                 drop_last=True)
 
+        model.eval()
         with torch.no_grad():
             dict_label_counts = {i: 0 for i in range(n_classes)}
             for dict_data in tqdm(dataloader):
                 x, y = dict_data['x'].to(device), dict_data['y'].to(device)
                 dict_outputs = model(x)
 
-                emb = dict_outputs['emb']  # b x n_emb_dims x h x w
+                emb = dict_outputs['emb_']  # b x n_emb_dims x h x w
 
                 b, c, h, w = emb.shape
                 emb_flatten = emb.transpose(1, 0)  # c x b x h x w
@@ -56,12 +57,12 @@ def init_prototypes(n_classes, n_emb_dims,
                 for label in unique_labels_batch:
                     ind_label = (y_flatten == label)  # (b * h * w)
                     emb_label = emb_flatten[ind_label]  # m x n_emb_dims
-
                     prototypes[label] += emb_label.sum(dim=0, keepdim=True).detach()
                     dict_label_counts[label] = dict_label_counts[label] + emb_label.shape[0]
 
             for label, counts in dict_label_counts.items():
                 prototypes[label] /= counts
+        model.train()
         return prototypes
 
 

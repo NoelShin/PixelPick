@@ -29,22 +29,13 @@ class QuerySelector:
 
         self.network_name = args.network_name
         self.uncertainty_sampler = UncertaintySampler(args.query_strategy)
-        self.use_softmax = args.use_softmax
+        self.use_openset = args.use_openset
         self.query_strategy = args.query_strategy
         self.use_cb_sampling = args.use_cb_sampling
         self.use_mc_dropout = args.use_mc_dropout
         self.vote_type = args.vote_type
 
-    def __call__(self, nth_query, model=None):
-        # state_dict = torch.load(f"{self.dir_checkpoints}/{nth_query}_query/best_miou_model.pt")
-        # if self.network_name == "FPN":
-        #     model = FPNSeg(self.args).to(self.device)
-        # else:
-        #     model = DeepLab(self.args).to(self.device)
-        # model.load_state_dict(state_dict["model"])
-
-        if not self.use_softmax:
-            prototypes = state_dict["prototypes"].to(self.device)
+    def __call__(self, nth_query, model=None, prototypes=None):
         model.eval()
         if self.use_mc_dropout:
             model.turn_on_dropout()
@@ -128,28 +119,77 @@ class QuerySelector:
 
                     selected_queries_per_img = torch.zeros((h * w)).to(self.device)
 
-                    # if using vote uncertainty sampling
-                    if self.use_mc_dropout:
-                        grid = torch.zeros((h, w)).to(self.device)  # (h, w)
+                    if self.use_openset:
+                        dict_outputs = model(x)
 
-                        # repeat for mc_n_steps times - set to 20 as a default
-                        for step in range(self.mc_n_steps):
-                            dict_outputs = model(x)
+                        emb = dict_outputs['emb_']  # b x n_emb_dims x h x w
+                        _, dist = prediction(emb.detach(), prototypes.detach(), return_distance=True)
+                        prob = F.softmax(-dist, dim=1)
 
-                            # get softmax probability
-                            if self.use_softmax:
+                    else:
+                        # if using vote uncertainty sampling
+                        if self.use_mc_dropout:
+                            grid = torch.zeros((h, w)).to(self.device)  # (h, w)
+
+                            # repeat for mc_n_steps times - set to 20 as a default
+                            for step in range(self.mc_n_steps):
+                                dict_outputs = model(x)
+
+                                # get softmax probability
                                 prob = F.softmax(dict_outputs["pred"], dim=1)
 
-                            else:
-                                emb = dict_outputs['emb']  # b x n_emb_dims x h x w
-                                _, dist = prediction(emb.detach(), prototypes.detach(), return_distance=True)
-                                prob = F.softmax(-dist, dim=1)
+                                # get uncertainty map
+                                uncertainty_map = self.uncertainty_sampler(prob).squeeze(dim=0)  # h x w
+
+                                # exclude pixels that are already annotated, belong to the void category, or selected by
+                                # the oracle class balance sampling.
+                                if self.query_strategy in ["entropy", "least_confidence"]:
+                                    uncertainty_map[arr_masks[batch_ind]] = 0.0
+                                    uncertainty_map[mask_void_pixels] = 0.0
+                                    if self.n_pixels_by_oracle_cb > 0:
+                                        uncertainty_map[grid_oracle_cb[batch_ind]] = 0.0
+                                else:
+                                    uncertainty_map[arr_masks[batch_ind]] = 1.0
+                                    uncertainty_map[mask_void_pixels] = 1.0
+                                    if self.n_pixels_by_oracle_cb > 0:
+                                        uncertainty_map[grid_oracle_cb[batch_ind]] = 1.0
+
+                                if self.vote_type == "hard":
+                                    uncertainty_map = uncertainty_map.view(-1)  # (h * w)
+
+                                    ind_best_queries = torch.topk(uncertainty_map,
+                                                                  k=self.n_pixels_by_us,
+                                                                  dim=0,
+                                                                  largest=self.query_strategy in ["entropy", "least_confidence"]).indices  # k
+
+                                    grid = grid.view(-1)  # (h * w)
+                                    for ind in ind_best_queries:
+                                        grid[ind] += 1
+                                    grid.view(h, w)  # h x w
+
+                                else:
+                                    grid += uncertainty_map  # h x w
+
+                                if self.debug:
+                                    break
+
+                            grid = grid / self.mc_n_steps  # note that this line is actually not necessary
+                            grid = grid.view(-1)  # (h * w)
+                            ind_best_queries = torch.topk(grid,
+                                                          k=self.n_pixels_by_us,
+                                                          dim=0,
+                                                          largest=True if self.vote_type == "hard" else self.query_strategy in ["entropy", "least_confidence"]).indices  # k
+
+                        else:
+                            dict_outputs = model(x)
+
+                            prob = F.softmax(dict_outputs["pred"], dim=1)
+
 
                             # get uncertainty map
                             uncertainty_map = self.uncertainty_sampler(prob).squeeze(dim=0)  # h x w
 
-                            # exclude pixels that are already annotated, belong to the void category, or selected by
-                            # the oracle class balance sampling.
+                            # exclude pixels that are already annotated or belong to void category.
                             if self.query_strategy in ["entropy", "least_confidence"]:
                                 uncertainty_map[arr_masks[batch_ind]] = 0.0
                                 uncertainty_map[mask_void_pixels] = 0.0
@@ -161,128 +201,76 @@ class QuerySelector:
                                 if self.n_pixels_by_oracle_cb > 0:
                                     uncertainty_map[grid_oracle_cb[batch_ind]] = 1.0
 
-                            if self.vote_type == "hard":
-                                uncertainty_map = uncertainty_map.view(-1)  # (h * w)
+                            # get top k pixels
+                            uncertainty_map = uncertainty_map.view(-1)  # (h * w)
+                            ind_best_queries = torch.topk(uncertainty_map,
+                                                          k=self.n_pixels_by_us,
+                                                          dim=0,
+                                                          largest=self.query_strategy in ["entropy",
+                                                                                          "least_confidence"]).indices  # k
 
-                                ind_best_queries = torch.topk(uncertainty_map,
-                                                              k=self.n_pixels_by_us,
-                                                              dim=0,
-                                                              largest=self.query_strategy in ["entropy", "least_confidence"]).indices  # k
+                        if self.use_cb_sampling:
+                            ind_ignore_index = np.where(y.flatten() == self.ignore_index)[0]
+                            y_masked = y.flatten()[arr_masks[batch_ind].flatten()]
+                            set_unique_labels = set(y_masked)
 
-                                grid = grid.view(-1)  # (h * w)
-                                for ind in ind_best_queries:
-                                    grid[ind] += 1
-                                grid.view(h, w)  # h x w
+                            rarest_label = self.ignore_index
+                            cnt = np.inf
+                            for ul in set_unique_labels:
+                                if dict_label_counts[ul] < cnt:
+                                    rarest_label = ul
+                            assert rarest_label != self.ignore_index
+                            y_flat = y.flatten()
+                            y_flat[~arr_masks[batch_ind].flatten()] = self.ignore_index
+                            mask_rarest_label = (y_flat == rarest_label)  # (h * w)
 
-                            else:
-                                grid += uncertainty_map  # h x w
+                            emb = dict_outputs["emb"]  # 1 x n_emb_dims x h / s x w / s
+                            emb = F.interpolate(emb, size=(h, w), mode='bilinear', align_corners=True).squeeze(dim=0)
 
-                            if self.debug:
-                                break
+                            n_emb_dims = emb.shape[0]
+                            emb = emb.view(n_emb_dims, h * w)
+                            emb = emb.transpose(1, 0)  # (h * w) x n_emb_dims
+                            emb_rarest = emb[mask_rarest_label]  # m x n_emb_dims
+                            emb_mean = emb_rarest.mean(dim=0)  # n_emb_dims
 
-                        grid = grid / self.mc_n_steps  # note that this line is actually not necessary
-                        grid = grid.view(-1)  # (h * w)
-                        ind_best_queries = torch.topk(grid,
-                                                      k=self.n_pixels_by_us,
-                                                      dim=0,
-                                                      largest=True if self.vote_type == "hard" else self.query_strategy in ["entropy", "least_confidence"]).indices  # k
+                            l2_dist = (emb - emb_mean.unsqueeze(dim=0)).pow(2).sum(dim=1).sqrt()
 
-                    else:
-                        dict_outputs = model(x)
+                            # compute distance from the closest labelled point
+                            grid = np.zeros((h, w))
+                            grid.fill(np.inf)
+                            grid_flat = grid.flatten()
 
-                        if self.use_softmax:
-                            prob = F.softmax(dict_outputs["pred"], dim=1)
+                            grid_loc = list()
+                            for i in range(360 * 480):
+                                grid_loc.append([i // w, i % w])
+                            grid_loc = np.array(grid_loc)
 
-                        else:
-                            emb = dict_outputs['emb']  # b x n_emb_dims x h x w
-                            _, dist = prediction(emb.detach(), prototypes.detach(), return_distance=True)
-                            prob = F.softmax(-dist, dim=1)
+                            list_ind = np.where(mask_rarest_label.flatten())[0]
+                            list_ind_2d = {(ind // w, ind % w) for ind in list_ind}
 
-                        # get uncertainty map
-                        uncertainty_map = self.uncertainty_sampler(prob).squeeze(dim=0)  # h x w
+                            for (i, j) in list_ind_2d:
+                                dist = ((grid_loc - np.expand_dims(np.array([i, j]), axis=0)) ** 2).sum(axis=1).squeeze()
+                                grid_flat = np.where(dist < grid_flat, dist, grid_flat)
+                            grid_flat = grid_flat / np.sqrt(h ** 2 + w ** 2)
+                            confidence_map = np.exp(-l2_dist.cpu().numpy() * grid_flat)
 
-                        # exclude pixels that are already annotated or belong to void category.
-                        if self.query_strategy in ["entropy", "least_confidence"]:
-                            uncertainty_map[arr_masks[batch_ind]] = 0.0
-                            uncertainty_map[mask_void_pixels] = 0.0
-                            if self.n_pixels_by_oracle_cb > 0:
-                                uncertainty_map[grid_oracle_cb[batch_ind]] = 0.0
-                        else:
-                            uncertainty_map[arr_masks[batch_ind]] = 1.0
-                            uncertainty_map[mask_void_pixels] = 1.0
-                            if self.n_pixels_by_oracle_cb > 0:
-                                uncertainty_map[grid_oracle_cb[batch_ind]] = 1.0
+                            # exclude the center points and the points where the uncertainty sampling already picked.
+                            confidence_map[list_ind] = 0.
+                            confidence_map[ind_best_queries.cpu().numpy()] = 0.
+                            confidence_map[ind_ignore_index] = 0.
 
-                        # get top k pixels
-                        uncertainty_map = uncertainty_map.view(-1)  # (h * w)
-                        ind_best_queries = torch.topk(uncertainty_map,
-                                                      k=self.n_pixels_by_us,
-                                                      dim=0,
-                                                      largest=self.query_strategy in ["entropy",
-                                                                                      "least_confidence"]).indices  # k
+                            confidence_map = torch.tensor(confidence_map)
 
-                    if self.use_cb_sampling:
-                        ind_ignore_index = np.where(y.flatten() == self.ignore_index)[0]
-                        y_masked = y.flatten()[arr_masks[batch_ind].flatten()]
-                        set_unique_labels = set(y_masked)
+                            ind_topk = torch.topk(confidence_map, k=self.n_pixels_by_us, largest=True).indices
 
-                        rarest_label = self.ignore_index
-                        cnt = np.inf
-                        for ul in set_unique_labels:
-                            if dict_label_counts[ul] < cnt:
-                                rarest_label = ul
-                        assert rarest_label != self.ignore_index
-                        y_flat = y.flatten()
-                        y_flat[~arr_masks[batch_ind].flatten()] = self.ignore_index
-                        mask_rarest_label = (y_flat == rarest_label)  # (h * w)
+                            for ind in ind_topk:
+                                selected_queries_per_img[ind] += 1
 
-                        emb = dict_outputs["emb"]  # 1 x n_emb_dims x h / s x w / s
-                        emb = F.interpolate(emb, size=(h, w), mode='bilinear', align_corners=True).squeeze(dim=0)
-
-                        n_emb_dims = emb.shape[0]
-                        emb = emb.view(n_emb_dims, h * w)
-                        emb = emb.transpose(1, 0)  # (h * w) x n_emb_dims
-                        emb_rarest = emb[mask_rarest_label]  # m x n_emb_dims
-                        emb_mean = emb_rarest.mean(dim=0)  # n_emb_dims
-
-                        l2_dist = (emb - emb_mean.unsqueeze(dim=0)).pow(2).sum(dim=1).sqrt()
-
-                        # compute distance from the closest labelled point
-                        grid = np.zeros((h, w))
-                        grid.fill(np.inf)
-                        grid_flat = grid.flatten()
-
-                        grid_loc = list()
-                        for i in range(360 * 480):
-                            grid_loc.append([i // w, i % w])
-                        grid_loc = np.array(grid_loc)
-
-                        list_ind = np.where(mask_rarest_label.flatten())[0]
-                        list_ind_2d = {(ind // w, ind % w) for ind in list_ind}
-
-                        for (i, j) in list_ind_2d:
-                            dist = ((grid_loc - np.expand_dims(np.array([i, j]), axis=0)) ** 2).sum(axis=1).squeeze()
-                            grid_flat = np.where(dist < grid_flat, dist, grid_flat)
-                        grid_flat = grid_flat / np.sqrt(h ** 2 + w ** 2)
-                        confidence_map = np.exp(-l2_dist.cpu().numpy() * grid_flat)
-
-                        # exclude the center points and the points where the uncertainty sampling already picked.
-                        confidence_map[list_ind] = 0.
-                        confidence_map[ind_best_queries.cpu().numpy()] = 0.
-                        confidence_map[ind_ignore_index] = 0.
-
-                        confidence_map = torch.tensor(confidence_map)
-
-                        ind_topk = torch.topk(confidence_map, k=self.n_pixels_by_us, largest=True).indices
-
-                        for ind in ind_topk:
+                        for ind in ind_best_queries:
                             selected_queries_per_img[ind] += 1
 
-                    for ind in ind_best_queries:
-                        selected_queries_per_img[ind] += 1
-
-                    selected_queries_per_img = selected_queries_per_img.view(h, w)
-                    list_quries.append(selected_queries_per_img.cpu().numpy())
+                        selected_queries_per_img = selected_queries_per_img.view(h, w)
+                        list_quries.append(selected_queries_per_img.cpu().numpy())
 
         if len(list_quries) > 0:
             selected_queries = np.array(list_quries).astype(np.bool)
@@ -329,6 +317,8 @@ class UncertaintySampler:
 
     def __call__(self, prob):
         return getattr(self, f"_{self.query_strategy}")(prob)
+
+
 
 
 def get_n_per_class(dict_init, n_new_pixels=3670):

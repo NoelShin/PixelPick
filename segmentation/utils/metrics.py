@@ -1,6 +1,30 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.linalg import norm
+
+
+def compute_distance(emb, prototypes, l2_norm=False):
+    if l2_norm:
+        emb = emb / norm(emb, ord=2, dim=1, keepdim=True)  # 1 x 32 x h x w
+        # prototypes = prototypes / norm(prototypes, ord=2, dim=-1, keepdim=True)
+
+    n_classes = prototypes.shape[0]
+    h, w = emb.shape[2:]
+    grid = torch.zeros((n_classes, h, w), dtype=torch.float32)
+
+    # prototypes: n_classes x 1 x 32
+    for i, p in enumerate(prototypes):
+        # p: 1 x 32
+        p = p.unsqueeze(dim=2).unsqueeze(dim=3)  # 1 x 32 x 1 x 1
+        p = p.repeat(1, 1, h, w)  # 1 x 32 x h x w
+        sim = F.cosine_similarity(p, emb, dim=1)  # 1 x h x w
+        # dist = ((emb - p) ** 2).sqrt()  # .sum(dim=1).sqrt()
+        # dist = torch.exp(-dist).mean(dim=1)  # 1 x h x w
+        # print(dist.shape)
+        # grid[i] = dist.squeeze()   # h x w
+        grid[i] = sim.squeeze()  # h x w
+    return grid  # n_classes x h x w
 
 
 def prediction(emb, prototypes, non_isotropic=False, return_distance=False):

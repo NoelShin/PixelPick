@@ -142,11 +142,11 @@ def get_optimizer(args, model, prototypes=None):
                                  'weight_decay': 5e-4,
                                  'momentum': 0.9}]
 
-                # if args.use_contrastive_loss:
-                #     list_params += [{'params': model.projection_head.parameters(),
-                #                      'lr': 1e-2,
-                #                      'weight_decay': 5e-4,
-                #                      'momentum': 0.9}]
+                if prototypes is not None:
+                    list_params += [{'params': prototypes,
+                                     'lr': 0.1,
+                                     'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
+
             optimizer = SGD(list_params)
 
         elif args.optimizer_type == "Adam":
@@ -176,15 +176,22 @@ def get_optimizer(args, model, prototypes=None):
                                  'lr': optimizer_params['lr'],
                                  'weight_decay': optimizer_params['weight_decay']}]
 
-                # if args.use_contrastive_loss:
-                #     list_params += [{'params': model.projection_head.parameters(),
-                #                      'lr': optimizer_params['lr'],
-                #                      'weight_decay': optimizer_params['weight_decay']}]
-
             if prototypes is not None:
                 list_params += [{'params': prototypes,
-                                 'lr': 0.001,
+                                 'lr': optimizer_params['lr'],
                                  'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
+
+                list_params += [{'params': model.aspp_.parameters(),
+                                 'lr': optimizer_params['lr'],
+                                 'weight_decay': optimizer_params['weight_decay']}]
+
+                list_params += [{'params': model.low_level_conv_.parameters(),
+                                 'lr': optimizer_params['lr'],
+                                 'weight_decay': optimizer_params['weight_decay']}]
+
+                list_params += [{'params': model.seg_head_.parameters(),
+                                 'lr': optimizer_params['lr'],
+                                 'weight_decay': optimizer_params['weight_decay']}]
             optimizer = Adam(list_params)
 
     elif args.dataset_name == "voc":
@@ -372,6 +379,38 @@ class EmbeddingVisualiser:
         self.dict_label_emb = {i: list() for i in range(self.n_classes)}
 
 
+dict_cv_label_category = {
+        0: "sky",
+        1: "building",
+        2: "pole",
+        3: "road",
+        4: "pavement",
+        5: "tree",
+        6: "sign symbol",
+        7: "fence",
+        8: "car",
+        9: "pedestrian",
+        10: "bicyclist",
+        11: "void"
+    }
+
+
+def get_dict_label_cnt(arr_masks, arr_labels):
+    dict_label_cnt = dict()
+    for mask, label in zip(arr_masks, arr_labels):
+        label_flat = label.flatten()
+        selected_label_pixels = label_flat[mask.flatten()]
+        print(selected_label_pixels)
+        set_labels = set(selected_label_pixels)
+        for l in set_labels:
+            cnt = (selected_label_pixels == l).sum()
+            try:
+                dict_label_cnt[l] += cnt
+            except KeyError:
+                dict_label_cnt.update({l: cnt})
+    return dict_label_cnt
+
+
 def colorise_label(arr):
     palette = {
                 0: (128, 128, 128),
@@ -392,7 +431,8 @@ def colorise_label(arr):
     for i in range(arr.shape[0]):
         for j in range(arr.shape[1]):
             grid[:, i, j] = palette[arr[i, j]]
-    return grid
+
+    return np.transpose(grid, (1, 2, 0))
 
 
 

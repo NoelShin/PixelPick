@@ -91,8 +91,8 @@ class Criterion:
         dict_loss = dict()
 
         if self.loss_type == "dce":
-            loss_dce = self._dce(dict_outputs["emb"], prototypes, labels, non_isotropic=non_isotropic,
-                                 dict_label_counts=dict_label_counts)
+            loss_dce = self._dce(dict_outputs["emb_"], prototypes, labels,
+                                 non_isotropic=non_isotropic, dict_label_counts=dict_label_counts)
             dict_loss.update({"dce": loss_dce})
 
         if self.use_pl:
