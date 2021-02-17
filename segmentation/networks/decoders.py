@@ -15,7 +15,7 @@ class FPNDecoder(nn.Module):
             n_ch_2 = 128
             n_ch_3 = 64
 
-        elif args.n_layers == 50:
+        elif args.n_layers in [50, 101]:
             n_ch_0 = 2048
             n_ch_1 = 1024
             n_ch_2 = 512
