@@ -63,12 +63,11 @@ def get_dataloader(args, batch_size, n_workers, shuffle, val=False, query=False)
 
     else:
         raise ValueError(args.dataset_name)
-
     dataloader = DataLoader(dataset,
                             batch_size=batch_size,
                             num_workers=n_workers,
                             shuffle=shuffle,
-                            drop_last=True if len(dataset) % batch_size != 0 else False)
+                            drop_last=len(dataset) % batch_size == 1)
     return dataloader
 
 

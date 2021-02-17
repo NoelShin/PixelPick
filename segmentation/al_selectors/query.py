@@ -164,7 +164,7 @@ class QueryStats:
         x_loc_t, y_loc_t = x_loc.transpose(), y_loc.transpose()
         dist = np.sqrt((x_loc - x_loc_t) ** 2 + (y_loc - y_loc_t) ** 2)
         try:
-            dist = dist[~np.eye(dist.shape[0], dtype=np.bool)].reshape(dist.shape[0], -1).sum() / 2
+            dist = dist[~np.eye(dist.shape[0], dtype=np.bool)].reshape(dist.shape[0], -1).mean()
         except ValueError:
             return np.NaN
         return dist

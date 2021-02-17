@@ -11,8 +11,7 @@ from tqdm import tqdm
 from networks.model import FPNSeg
 from networks.deeplab import DeepLab
 from networks.modules import init_prototypes, init_radii, EMA
-from utils.class_histogram import ClassHistogram
-from utils.metrics import prediction, eval_metrics
+from utils.metrics import prediction, eval_metrics, RunningScore
 from utils.utils import get_dataloader, get_criterion, get_optimizer, get_lr_scheduler, get_validator, AverageMeter
 from utils.utils import write_log, send_file, Visualiser, zip_dir
 from al_selectors.query import QuerySelector
@@ -65,8 +64,7 @@ class Model:
 
         # for tracking stats
         self.running_loss = AverageMeter()
-        self.running_miou = AverageMeter()
-        self.running_pixel_acc = AverageMeter()
+        self.running_score = RunningScore(args.n_classes)
 
         self.w_img_inp = args.w_img_inp
 
@@ -144,8 +142,8 @@ class Model:
 
                     model, prototypes = self._train()
 
-                    zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
-                    send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
+                    # zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
+                    # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
                     if nth_query == (self.max_budget // self.n_pixels_per_query) - 1 or self.nth_query == 20:
                         break
 
@@ -167,17 +165,13 @@ class Model:
                     queries = self.query_selector(nth_query, model)
                     self.dataloader.dataset.label_queries(queries, nth_query + 1)
 
-                    zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
-                    send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
+                    # zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
+                    # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
                     if nth_query == (self.max_budget // self.n_pixels_per_query) - 1 or self.n_pixels_per_img == 0:
                         break
 
                     elif nth_query == 0:
                         torch.save({"model": model.state_dict()}, self.model_0_query)
-
-                    # select queries using the current model and label them.
-                    # queries = self.query_selector(nth_query, model)
-                    # self.dataloader.dataset.label_queries(queries, nth_query + 1)
 
                     # pseudo-labelling based on the current labels
                     if self.use_pseudo_label:
@@ -202,8 +196,6 @@ class Model:
         dataloader_iter = iter(self.dataloader)
         tbar = tqdm(range(len(self.dataloader)))
 
-        total_inter, total_union = 0, 0
-        total_correct, total_label = 0, 0
         for batch_ind in tbar:
             dict_data = next(dataloader_iter)
             x, y = dict_data['x'].to(self.device), dict_data['y'].to(self.device)
@@ -223,6 +215,8 @@ class Model:
             dict_losses = {"ce": F.cross_entropy(logits, y, ignore_index=self.ignore_index)}
             pred = logits.argmax(dim=1)  # for computing mIoU, pixel acc.
             prob = F.softmax(logits.detach(), dim=1)
+
+            self.running_score.update(y.cpu().numpy(), pred.cpu().numpy())
 
             if self.use_pseudo_label and self.nth_query > 0:
                 dict_losses.update({"ce_pseudo": F.cross_entropy(logits, y_pseudo, ignore_index=self.ignore_index)})
@@ -275,22 +269,12 @@ class Model:
             optimizer.step()
 
             self.running_loss.update(loss.detach().item())
-            correct, labeled, inter, union = eval_metrics(pred, y, self.n_classes, self.ignore_index)
-
-            total_inter, total_union = total_inter + inter, total_union + union
-            total_correct, total_label = total_correct + correct, total_label + labeled
-
-            pix_acc = 1.0 * total_correct / (np.spacing(1) + total_label)
-            IoU = 1.0 * total_inter / (np.spacing(1) + total_union)
-            mIoU = IoU.mean()
-
-            self.running_miou.update(mIoU)
-            self.running_pixel_acc.update(pix_acc)
+            scores = self.running_score.get_scores()[0]
 
             tbar.set_description(fmt.format(self.experim_name,
                                             epoch,
-                                            self.running_miou.avg,
-                                            self.running_pixel_acc.avg,
+                                            scores["Mean IoU"],
+                                            scores["Pixel Acc"],
                                             self.running_loss.avg))
 
             if self.lr_scheduler_type == "Poly":
@@ -302,14 +286,14 @@ class Model:
         if self.lr_scheduler_type == "MultiStepLR":
             lr_scheduler.step(epoch=epoch - 1)
 
-        write_log(log, list_entities=[epoch, self.running_miou.avg, self.running_pixel_acc.avg, self.running_loss.avg])
+        write_log(log, list_entities=[epoch, scores["Mean IoU"], scores["Pixel Acc"], self.running_loss.avg])
         self._reset_meters()
 
-        confidence = self._query(prob, 'least_confidence')  # prob.max(dim=1)[0]
+        confidence = self._query(prob, 'least_confidence')
         margin = self._query(prob, 'margin_sampling')
         entropy = self._query(prob, 'entropy')
 
-        dict_tensors = {'input': x[0].cpu(),  # dict_data['x'][0].cpu(),
+        dict_tensors = {'input': x[0].cpu(),
                         'target': dict_data['y'][0].cpu(),
                         'pred': pred[0].detach().cpu(),
                         'confidence': confidence[0].cpu(),
@@ -362,8 +346,6 @@ class Model:
         tbar = tqdm(range(len(self.dataloader_val)))
         fmt = "mIoU: {:.3f} | pixel acc.: {:.3f}"
 
-        total_inter, total_union = 0, 0
-        total_correct, total_label = 0, 0
         with torch.no_grad():
             for _ in tbar:
                 dict_data = next(dataloader_iter)
@@ -390,25 +372,15 @@ class Model:
                     _, dist = prediction(emb, prototypes, return_distance=True)
                     prob_ = F.softmax(-dist, dim=1)
 
-                # b x h x w
-                correct, labeled, inter, union = eval_metrics(pred, y, self.n_classes, self.ignore_index)
+                self.running_score.update(y.cpu().numpy(), pred.cpu().numpy())
+                scores = self.running_score.get_scores()[0]
 
-                total_inter, total_union = total_inter + inter, total_union + union
-                total_correct, total_label = total_correct + correct, total_label + labeled
-
-                # compute metrics
-                pix_acc = 1.0 * total_correct / (np.spacing(1) + total_label)
-                IoU = 1.0 * total_inter / (np.spacing(1) + total_union)
-                mIoU = IoU.mean()
-
-                self.running_miou.update(mIoU)
-                self.running_pixel_acc.update(pix_acc)
-                tbar.set_description(fmt.format(self.running_miou.avg, self.running_pixel_acc.avg))
+                tbar.set_description(fmt.format(scores["Mean IoU"], scores["Pixel Acc"]))
 
                 if self.debug:
                     break
 
-        if self.running_miou.avg > self.best_miou:
+        if scores["Mean IoU"] > self.best_miou:
             state_dict = dict()
             state_dict_model = model.state_dict()
             state_dict.update({"model": state_dict_model})
@@ -417,20 +389,20 @@ class Model:
 
             torch.save(state_dict, f"{self.dir_checkpoints}/{self.nth_query}_query/best_miou_model.pt")
             print("best model has been saved (epoch: {:d} | prev. miou: {:.4f} => new miou: {:.4f})."
-                  .format(epoch, self.best_miou, self.running_miou.avg))
-            self.best_miou = self.running_miou.avg
+                  .format(epoch, self.best_miou, scores["Mean IoU"]))
+            self.best_miou = scores["Mean IoU"]
 
-        write_log(self.log_val, list_entities=[epoch, self.running_miou.avg, self.running_pixel_acc.avg])
+        write_log(self.log_val, list_entities=[epoch, scores["Mean IoU"], scores["Pixel Acc"]])
         print('\n' + '=' * 100)
         print("Experim name:", self.experim_name)
         print("Epoch {:d} | miou: {:.3f} | pixel_acc.: {:.3f}".format(epoch,
-                                                                      self.running_miou.avg,
-                                                                      self.running_pixel_acc.avg))
+                                                                      scores["Mean IoU"],
+                                                                      scores["Pixel Acc"]))
         print('=' * 100 + '\n')
 
         self._reset_meters()
 
-        confidence = self._query(prob, 'least_confidence')  # prob.max(dim=1)[0]
+        confidence = self._query(prob, 'least_confidence')
         margin = self._query(prob, 'margin_sampling')
         entropy = self._query(prob, 'entropy')
 
@@ -461,9 +433,10 @@ class Model:
             b, _, h, w = prob.shape
             query = torch.rand((b, h, w))
 
+        else:
+            raise ValueError
         return query
 
     def _reset_meters(self):
-        self.running_miou.reset()
-        self.running_pixel_acc.reset()
         self.running_loss.reset()
+        self.running_score.reset()

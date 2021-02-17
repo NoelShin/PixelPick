@@ -97,6 +97,9 @@ class Arguments:
         # top n percent
         parser.add_argument("--top_n_percent", type=float, default=0.05)
 
+        # diversity experim
+        parser.add_argument("--diversity_ratio", type=float, default=1.0)
+
         self.parser = parser
 
     def parse_args(self):
