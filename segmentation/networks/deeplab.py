@@ -43,6 +43,8 @@ class DeepLab(nn.Module):
             )
 
         self.use_openset = args.use_openset
+        # if self.use_openset:
+        #     self.fc = nn.Conv2d(256, args.n_emb_dims, 1)
         if self.use_openset:
             self.aspp_ = ASPP(backbone, output_stride, nn.BatchNorm2d)
 
@@ -118,6 +120,10 @@ class DeepLab(nn.Module):
             emb = F.interpolate(emb, size=inputs.size()[2:], mode='bilinear', align_corners=True)
             dict_outputs['emb'] = emb
 
+            # if self.use_openset:
+            #     emb_ = self.fc(dict_outputs["emb"])
+            #     emb_ = F.interpolate(emb_, size=inputs.size()[2:], mode='bilinear', align_corners=True)
+            #     dict_outputs['emb_'] = emb_
             if self.use_openset:
                 x = self.aspp_(backbone_feat)  # 1/16 -> aspp -> 1/16
 

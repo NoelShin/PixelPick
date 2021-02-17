@@ -13,8 +13,8 @@ class Arguments:
         parser.add_argument("--model_name", type=str, default="gcpl_seg", choices=["gcpl_seg", "mp_seg"])
         parser.add_argument("--n_pixels_per_img", type=int, default=0)
         parser.add_argument("--network_name", type=str, default="deeplab", choices=["deeplab", "FPN"])
-        parser.add_argument("--use_aug", action='store_true', default=False)
-        parser.add_argument("--use_softmax", action='store_true', default=False)
+        parser.add_argument("--use_aug", action='store_true', default=True)
+        parser.add_argument("--use_softmax", action='store_true', default=True)
         parser.add_argument("--suffix", type=str, default='')
 
         # active learning
@@ -49,7 +49,7 @@ class Arguments:
         parser.add_argument("--use_mc_dropout", action="store_true", default=False)
         parser.add_argument("--mc_dropout_p", type=float, default=0.2)
         parser.add_argument("--mc_n_steps", type=int, default=20)
-        parser.add_argument("--vote_type", type=str, default="hard", choices=["soft", "hard"])
+        parser.add_argument("--vote_type", type=str, default="soft", choices=["soft", "hard"])
 
         # system
         parser.add_argument("--gpu_ids", type=str, nargs='+', default='0')
@@ -90,6 +90,12 @@ class Arguments:
                             choices=["random", "supervised", "moco_v2", "swav", "deepcluster_v2"])
         parser.add_argument("--use_dilated_resnet", type=bool, default=True, help="whether to use dilated resnet")
         parser.add_argument("--n_layers", type=int, default=50, choices=[18, 34, 50, 101], help="encoder (resnet) depth")
+
+        # hardness experiment
+        parser.add_argument("--num_bin", type=int, default=0)
+
+        # top n percent
+        parser.add_argument("--top_n_percent", type=float, default=0.05)
 
         self.parser = parser
 
@@ -234,9 +240,9 @@ class Arguments:
 
         # query strategy
         list_keywords.append(f"{args.query_strategy}") if args.n_pixels_by_us > 0 else None
-        list_keywords.append("vote") if args.use_mc_dropout else None
-        list_keywords.append("soft") if args.vote_type == "soft" else None
+        list_keywords.append(f"{args.vote_type}") if args.use_mc_dropout else None
         list_keywords.append(f"{args.n_pixels_by_us}")
+        list_keywords.append(f"p{args.top_n_percent}") if args.top_n_percent > 0. else None
         list_keywords.append("cb") if args.use_cb_sampling else None
         list_keywords.append("oracle_cb_{}".format(args.n_pixels_by_oracle_cb)) if args.n_pixels_by_oracle_cb > 0 else None
         list_keywords.append("img_inp") if args.use_img_inp else None

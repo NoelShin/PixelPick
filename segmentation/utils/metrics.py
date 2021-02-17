@@ -4,6 +4,25 @@ import torch.nn.functional as F
 from torch.linalg import norm
 
 
+def compute_spatial_coverage_per_image(indices):
+    x_loc, y_loc = indices
+    x_loc, y_loc = np.expand_dims(x_loc, axis=1), np.expand_dims(y_loc, axis=1)
+    x_loc_t, y_loc_t = x_loc.transpose(), y_loc.transpose()
+    dist = np.sqrt((x_loc - x_loc_t) ** 2 + (y_loc - y_loc_t) ** 2)
+    try:
+        dist = dist[~np.eye(dist.shape[0], dtype=np.bool)].reshape(dist.shape[0], -1).sum() / 2
+    except ValueError:
+        return np.NaN
+    return dist
+
+
+def compute_spatial_coverage(masks):
+    list_dists = list()
+    for m in masks:
+        list_dists.append(compute_spatial_coverage_per_image(np.where(m)))
+    return np.nanmean(list_dists)
+
+
 def compute_distance(emb, prototypes, l2_norm=False):
     if l2_norm:
         emb = emb / norm(emb, ord=2, dim=1, keepdim=True)  # 1 x 32 x h x w

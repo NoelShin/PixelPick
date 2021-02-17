@@ -147,6 +147,10 @@ def get_optimizer(args, model, prototypes=None):
                                      'lr': 0.1,
                                      'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
 
+                    list_params += [{'params': model.fc,
+                                     'lr': 5e-4,
+                                     'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
+
             optimizer = SGD(list_params)
 
         elif args.optimizer_type == "Adam":
@@ -179,8 +183,11 @@ def get_optimizer(args, model, prototypes=None):
             if prototypes is not None:
                 list_params += [{'params': prototypes,
                                  'lr': optimizer_params['lr'],
-                                 'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
+                                 'weight_decay': optimizer_params['weight_decay']}] if args.model_name == "gcpl_seg" else []
 
+                # list_params += [{'params': model.fc.parameters(),
+                #                  'lr': optimizer_params['lr'],
+                #                  'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
                 list_params += [{'params': model.aspp_.parameters(),
                                  'lr': optimizer_params['lr'],
                                  'weight_decay': optimizer_params['weight_decay']}]
