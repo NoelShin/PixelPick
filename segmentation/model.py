@@ -162,6 +162,10 @@ class Model:
                     self.nth_query = nth_query
 
                     model, prototypes = self._train()
+                    
+                    # select queries using the current model and label them.
+                    queries = self.query_selector(nth_query, model)
+                    self.dataloader.dataset.label_queries(queries, nth_query + 1)
 
                     zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
                     send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
@@ -172,8 +176,8 @@ class Model:
                         torch.save({"model": model.state_dict()}, self.model_0_query)
 
                     # select queries using the current model and label them.
-                    queries = self.query_selector(nth_query, model)
-                    self.dataloader.dataset.label_queries(queries, nth_query + 1)
+                    # queries = self.query_selector(nth_query, model)
+                    # self.dataloader.dataset.label_queries(queries, nth_query + 1)
 
                     # pseudo-labelling based on the current labels
                     if self.use_pseudo_label:
