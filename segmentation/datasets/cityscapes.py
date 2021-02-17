@@ -11,8 +11,6 @@ from torchvision.transforms import ColorJitter, RandomApply, RandomGrayscale
 import torchvision.transforms.functional as TF
 from tqdm import tqdm
 
-# from utils.ced import CED
-
 
 class CityscapesDataset(Dataset):
     def __init__(self, args, val=False, query=False):
