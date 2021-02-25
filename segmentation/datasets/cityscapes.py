@@ -55,7 +55,7 @@ class CityscapesDataset(Dataset):
             raise ValueError(f"Invalid downsample {args.downsample}")
         self.pad_size = (0, 0)
 
-        self.arr_masks = None
+        self.arr_masks, self.n_pixels_total = None, -1
 
         n_pixels_per_img = args.n_pixels_by_us
 
@@ -83,13 +83,13 @@ class CityscapesDataset(Dataset):
                     mask = mask_flat.reshape((h, w))
                     list_masks.append(mask)
 
-                arr_masks = np.array(list_masks, dtype=np.bool)
+                self.arr_masks = np.array(list_masks, dtype=np.bool)
 
                 # save initial labelled pixels for a future reproduction
-                np.save(path_arr_masks, arr_masks)
-
-                print("# labelled pixels used for training:", arr_masks.astype(np.int32).sum())
-                self.arr_masks = arr_masks
+                np.save(path_arr_masks, self.arr_masks)
+                self.n_pixels_total = self.arr_masks.sum()
+                print("# labelled pixels used for training:", self.n_pixels_total)
+            np.save(f"{self.dir_checkpoints}/0_query/label.npy", self.arr_masks)
 
         self.use_ced = args.use_ced
         self.use_img_inp = args.use_img_inp

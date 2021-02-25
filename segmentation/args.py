@@ -95,7 +95,7 @@ class Arguments:
         parser.add_argument("--num_bin", type=int, default=0)
 
         # top n percent
-        parser.add_argument("--top_n_percent", type=float, default=0.05)
+        parser.add_argument("--top_n_percent", type=float, default=0.)
 
         # diversity experim
         parser.add_argument("--diversity_ratio", type=float, default=1.0)
@@ -184,7 +184,7 @@ class Arguments:
             args.ignore_index = 255
             args.mean = [0.485, 0.456, 0.406]
             args.std = [0.229, 0.224, 0.225]
-            args.n_classes = 21 if args.use_softmax or not args.ignore_bg else 20
+            args.n_classes = 21  # if args.use_softmax or not args.ignore_bg else 20
 
             args.n_epochs = 50
 
@@ -192,6 +192,8 @@ class Arguments:
             args.size_crop = 320
 
             args.optimizer_type = "SGD"
+            args.lr_scheduler_type = "Poly"
+
             args.optimizer_params = {
                 "lr": 1e-2,
                 "weight_decay": 1e-4,
@@ -206,9 +208,9 @@ class Arguments:
                 },
 
                 "photometric": {
-                    "random_color_jitter": False,
-                    "random_grayscale": False,
-                    "random_gaussian_blur": False
+                    "random_color_jitter": args.use_aug,
+                    "random_grayscale": args.use_aug,
+                    "random_gaussian_blur": args.use_aug
                 }
             }
 
@@ -245,7 +247,7 @@ class Arguments:
         list_keywords.append(f"{args.query_strategy}") if args.n_pixels_by_us > 0 else None
         list_keywords.append(f"{args.vote_type}") if args.use_mc_dropout else None
         list_keywords.append(f"{args.n_pixels_by_us}")
-        list_keywords.append(f"p{args.top_n_percent}") if args.top_n_percent > 0. else None
+        list_keywords.append(f"p{args.top_n_percent}") if args.top_n_percent > 0. and args.n_pixels_by_us > 0 else None
         list_keywords.append("cb") if args.use_cb_sampling else None
         list_keywords.append("oracle_cb_{}".format(args.n_pixels_by_oracle_cb)) if args.n_pixels_by_oracle_cb > 0 else None
         list_keywords.append("img_inp") if args.use_img_inp else None

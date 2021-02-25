@@ -41,20 +41,20 @@ class Model:
         self.use_img_inp = args.use_img_inp
 
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu:0")
-        self.dataloader = get_dataloader(args, val=False, query=False,
+        self.dataloader = get_dataloader(deepcopy(args), val=False, query=False,
                                          shuffle=True, batch_size=args.batch_size, n_workers=args.n_workers)
-        self.dataloader_query = get_dataloader(args, val=False, query=True,
+
+        self.dataloader_query = get_dataloader(deepcopy(args), val=False, query=True,
                                                shuffle=False, batch_size=1, n_workers=args.n_workers)
-        self.dataloader_val = get_dataloader(args, val=True, query=False,
+
+        self.dataloader_val = get_dataloader(deepcopy(args), val=True, query=False,
                                              shuffle=False, batch_size=1, n_workers=args.n_workers)
 
         if args.network_name == "FPN":
             self.model = FPNSeg(args).to(self.device)
         else:
             self.model = DeepLab(args).to(self.device)
-
         self.criterion = get_criterion(args, self.device)
-
         self.lr_scheduler_type = args.lr_scheduler_type
 
         self.vis = Visualiser(args.dataset_name)
@@ -105,11 +105,11 @@ class Model:
 
             self._train()
 
-            zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
-            send_file(zip_file, file_name=f"{self.experim_name}", remove_file=True)
+            # zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
+            # send_file(zip_file, file_name=f"{self.experim_name}", remove_file=True)
         # active learning model
         else:
-            if os.path.isfile(self.model_0_query):
+            if os.path.isfile(self.model_0_query) and False:
                 state_dict = torch.load(self.model_0_query)
                 model = deepcopy(self.model)
                 model.load_state_dict(state_dict["model"])
@@ -188,9 +188,11 @@ class Model:
 
     def _train_epoch(self, epoch, model, optimizer, lr_scheduler, prototypes=None, dict_label_projection=None):
         if self.n_pixels_per_img != 0:
-            print(f"training an epoch {epoch} of {self.nth_query}th query ({self.dataloader.dataset.arr_masks.sum()} labelled pixels)")
+            print(f"training an epoch {epoch} of {self.nth_query}th query ({self.dataloader.dataset.n_pixels_total} labelled pixels)")
+            fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
+        else:
+            fp = f"{self.dir_checkpoints}/fully_sup/{epoch}_train.png"
         log = f"{self.log_train}"
-        fp = f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_train.png"
 
         model.train()
         dataloader_iter = iter(self.dataloader)
@@ -318,12 +320,6 @@ class Model:
                                      learnable=self.model_name == "gcpl_seg",
                                      device=self.device) if self.use_openset else None
 
-        # if self.use_contrastive_loss and self.nth_query == 0:
-        #     self.dict_label_projection = get_dict_label_projection(self.dataloader_query, model,
-        #                                                       arr_masks=self.dataloader.dataset.arr_masks,
-        #                                                       ignore_index=self.ignore_index,
-        #                                                       region_contrast=self.use_region_contrast)
-
         optimizer = get_optimizer(self.args, model, prototypes=prototypes)
         lr_scheduler = get_lr_scheduler(self.args, optimizer=optimizer, iters_per_epoch=len(self.dataloader))
 
@@ -387,7 +383,10 @@ class Model:
             if self.use_openset:
                 state_dict.update({"prototypes": prototypes.cpu()})
 
-            torch.save(state_dict, f"{self.dir_checkpoints}/{self.nth_query}_query/best_miou_model.pt")
+            if self.n_pixels_per_img != 0:
+                torch.save(state_dict, f"{self.dir_checkpoints}/{self.nth_query}_query/best_miou_model.pt")
+            else:
+                torch.save(state_dict, f"{self.dir_checkpoints}/fully_sup/best_miou_model.pt")
             print("best model has been saved (epoch: {:d} | prev. miou: {:.4f} => new miou: {:.4f})."
                   .format(epoch, self.best_miou, scores["Mean IoU"]))
             self.best_miou = scores["Mean IoU"]
@@ -413,7 +412,10 @@ class Model:
                         'margin': -margin[0].cpu(),  # minus sign is to draw smaller margin part brighter
                         'entropy': entropy[0].cpu()}
 
-        self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_val.png")
+        if self.n_pixels_per_img != 0:
+            self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/{self.nth_query}_query/{epoch}_val.png")
+        else:
+            self.vis(dict_tensors, fp=f"{self.dir_checkpoints}/fully_sup/{epoch}_val.png")
         return
 
     @staticmethod

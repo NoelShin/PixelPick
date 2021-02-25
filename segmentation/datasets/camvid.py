@@ -47,7 +47,7 @@ class CamVidDataset(Dataset):
         self.crop_size = (360 // self.downsample, 480 // self.downsample)
         self.pad_size = (0, 0)
 
-        self.arr_masks = None
+        self.arr_masks, self.n_pixels_total = None, -1
 
         n_pixels_per_img = args.n_pixels_by_us
 
@@ -77,13 +77,13 @@ class CamVidDataset(Dataset):
                     mask = mask_flat.reshape((h, w))
                     list_masks.append(mask)
 
-                arr_masks = np.array(list_masks, dtype=np.bool)
+                self.arr_masks = np.array(list_masks, dtype=np.bool)
 
                 # save initial labelled pixels for a future reproduction
-                np.save(path_arr_masks, arr_masks)
-
-                print("# labelled pixels used for training:", arr_masks.astype(np.int32).sum())
-                self.arr_masks = arr_masks
+                np.save(path_arr_masks, self.arr_masks)
+                self.n_pixels_total = self.arr_masks.sum()
+                print("# labelled pixels used for training:", self.n_pixels_total)
+            np.save(f"{self.dir_checkpoints}/0_query/label.npy", self.arr_masks)
 
         self.use_ced = args.use_ced
         self.use_img_inp = args.use_img_inp
@@ -101,17 +101,18 @@ class CamVidDataset(Dataset):
         self.val = val
         self.query = query
 
-    def label_queries(self, queries, nth_query):
+    def label_queries(self, queries, nth_query=None):
         assert len(queries) == len(self.arr_masks), f"{queries.shape}, {self.arr_masks.shape}"
         previous = self.arr_masks.sum()
 
         self.arr_masks = np.maximum(self.arr_masks, queries)
 
-        try:
-            np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
-        except FileNotFoundError:
-            os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
-            np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
+        if isinstance(nth_query, int):
+            try:
+                np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
+            except FileNotFoundError:
+                os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
+                np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
         new = self.arr_masks.sum()
         print("# labelled pixels is changed from {} to {} (delta: {})".format(previous, new, new - previous))
 
@@ -288,8 +289,12 @@ class CamVidDataset(Dataset):
         else:
             y_pseudo = None
 
-        # if not val nor query dataset, do augmentation
-        if not self.val and not self.query:
+        # if val or query dataset, do NOT do augmentation
+        if self.val or self.query:
+            x = TF.to_tensor(x)
+            x = TF.normalize(x, self.mean, self.std)
+
+        else:
             if self.arr_masks is not None:
                 mask = Image.fromarray(self.arr_masks[ind].astype(np.uint8) * 255)
             else:
@@ -304,10 +309,6 @@ class CamVidDataset(Dataset):
             dict_data.update({'mask': mask, 'y_pseudo': torch.tensor(np.asarray(y_pseudo, np.int64),
                                                                      dtype=torch.long)})
 
-            x = TF.to_tensor(x)
-            x = TF.normalize(x, self.mean, self.std)
-
-        else:
             x = TF.to_tensor(x)
             x = TF.normalize(x, self.mean, self.std)
 

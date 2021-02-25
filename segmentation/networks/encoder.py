@@ -12,7 +12,8 @@ resnet50 = {
 resnet = {
     18: "../networks/backbones/pretrained/resnet18-pytorch.pth",
     34: "../networks/backbones/pretrained/resnet34-pytorch.pth",
-    50: "../networks/backbones/pretrained/resnet50-pytorch.pth",
+    # 50: "../networks/backbones/pretrained/resnet50-pytorch.pth",
+    50: "/home/gishin-temp/projects/open_set/segmentation/networks/backbones/pretrained/resnet50-pytorch.pth",
     101: "../networks/backbones/pretrained/resnet101-pytorch.pth"
 }
 

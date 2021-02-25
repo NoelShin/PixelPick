@@ -68,10 +68,16 @@ class FPNDecoder(nn.Module):
         dict_outputs = dict()
 
         c2, c3, c4, c5 = list_inter_features
-        p5 = self.lat_layer_0(c5)
-        p4 = self._upsample_add(p5, self.lat_layer_1(c4))
-        p3 = self._upsample_add(p4, self.lat_layer_2(c3))
-        p2 = self._upsample_add(p3, self.lat_layer_3(c2))
+
+        c5 = self.lat_layer_0(c5)
+        c4 = self.lat_layer_1(c4)
+        c3 = self.lat_layer_2(c3)
+        c2 = self.lat_layer_3(c2)
+
+        p5 = c5
+        p4 = self._upsample_add(p5, c4)
+        p3 = self._upsample_add(p4, c3)
+        p2 = self._upsample_add(p3, c2)
 
         p5 = self.upsample_blocks_0(p5)
         p4 = self.upsample_blocks_1(p4)
@@ -81,12 +87,17 @@ class FPNDecoder(nn.Module):
         emb = p2 + p3 + p4 + p5
 
         if self.use_softmax:
-            dict_outputs.update({"pred": self.classifier(emb)})
+            dict_outputs.update({"emb": emb, "pred": self.classifier(emb)})
+
+            # dict_outputs.update({
+            #     "c5": c5.cpu(),
+            #     "c4": c4.cpu(),
+            #     "c3": c3.cpu(),
+            #     "c2": c2.cpu()
+            # })
         else:
             dict_outputs.update({"emb": self.fc(emb)})
 
-        if self.use_img_inp:
-            dict_outputs.update({"img_inp": self.fc_img_inp(emb)})
         return dict_outputs
 
     @staticmethod

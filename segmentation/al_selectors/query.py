@@ -12,6 +12,7 @@ from utils.metrics import prediction, eval_metrics
 class QuerySelector:
     def __init__(self, args, dataloader, device=torch.device("cuda:0")):
         self.args = args
+        self.dataset_name = args.dataset_name
         self.dataloader = dataloader
         self.debug = args.debug
         self.device = device
@@ -61,13 +62,13 @@ class QuerySelector:
             model.turn_on_dropout()
 
         print(f"Choosing pixels by {self.query_strategy}")
-        list_queries = list()
+        list_queries, n_pixels = list(), 0
         with torch.no_grad():
             for batch_ind, dict_data in tqdm(enumerate(self.dataloader)):
                 x = dict_data['x'].to(self.device)
-                y = dict_data['y'].squeeze(dim=0).numpy()   # 360 x 480
+                y = dict_data['y'].squeeze(dim=0).numpy()   # h x w
                 mask = arr_masks[batch_ind]
-                mask_void = (y == 11)  # 360 x 480
+                mask_void = (y == self.ignore_index)  # h x w
                 h, w = x.shape[2:]
 
                 # get uncertainty map
@@ -81,7 +82,7 @@ class QuerySelector:
                         uc_map_ = self.uncertainty_sampler(prob_).squeeze(dim=0)  # h x w
                         uc_map += uc_map_
                         prob += prob_
-
+                    up_map = up_map / self.mc_n_steps
                     prob = prob / self.mc_n_steps
 
                 else:
@@ -96,6 +97,7 @@ class QuerySelector:
                 # select queries
                 query = self._select_queries(uc_map)
                 list_queries.append(query)
+                n_pixels += query.sum()
 
                 self.query_stats.update(query, y, prob)
 
@@ -105,12 +107,11 @@ class QuerySelector:
         self.query_stats.save(nth_query)
 
         assert len(list_queries) > 0, f"no queries are chosen!"
-        queries = np.stack(list_queries, axis=0)
-        print(f"{queries.sum()} labelled pixels  are chosen by {self.query_strategy} strategy")
+        queries = np.stack(list_queries, axis=0) if self.dataset_name != "voc" else list_queries
+        print(f"{n_pixels} labelled pixels  are chosen by {self.query_strategy} strategy")
 
         # Update labels for query dataloader. Note that this does not update labels for training dataloader.
-        self.dataloader.dataset.label_queries(queries, nth_query)
-
+        self.dataloader.dataset.label_queries(queries, nth_query + 1)
         return queries
 
 

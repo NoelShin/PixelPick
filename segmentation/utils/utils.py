@@ -51,18 +51,19 @@ def get_criterion(args, device):
 def get_dataloader(args, batch_size, n_workers, shuffle, val=False, query=False):
     if args.dataset_name == "cs":
         from datasets.cityscapes import CityscapesDataset
-        dataset = CityscapesDataset(args, val, query=query)
+        dataset = CityscapesDataset(args, val=val, query=query)
 
     elif args.dataset_name == "cv":
         from datasets.camvid import CamVidDataset
-        dataset = CamVidDataset(args, val, query=query)
+        dataset = CamVidDataset(args, val=val, query=query)
 
     elif args.dataset_name == "voc":
         from datasets.voc import VOC2012Segmentation
-        dataset = VOC2012Segmentation(args, val)
+        dataset = VOC2012Segmentation(args, val=val, query=query)
 
     else:
         raise ValueError(args.dataset_name)
+
     dataloader = DataLoader(dataset,
                             batch_size=batch_size,
                             num_workers=n_workers,
@@ -202,25 +203,47 @@ def get_optimizer(args, model, prototypes=None):
 
     elif args.dataset_name == "voc":
         from torch.optim import SGD
-        list_params = [{'params': model.encoder.parameters(),
-                        'lr': optimizer_params['lr'] / 10,
-                        'weight_decay': optimizer_params['weight_decay'],
-                        'momentum': optimizer_params['momentum']}]
+        if args.network_name == "FPN":
+            list_params = [{'params': model.encoder.parameters(),
+                            'lr': 1e-3,
+                            'weight_decay': 1e-4,
+                            'momentum': 0.9}]
 
-        list_params += [{'params': model.decoder.parameters(),
-                         'lr': optimizer_params['lr'],
-                         'weight_decay': optimizer_params['weight_decay'],
-                         'momentum': optimizer_params['momentum']}]
+            list_params += [{'params': model.decoder.parameters(),
+                             'lr': 1e-2,
+                             'weight_decay': 1e-4,
+                             'momentum': 0.9}]
+        else:
+            list_params = [{'params': model.backbone.parameters(),
+                            'lr': 1e-3,
+                            'weight_decay': 5e-4,
+                            'momentum': 0.9}]
 
-        if prototypes is not None:
-            list_params += [{'params': prototypes,
-                             'lr': 1.,
-                             'weight_decay': optimizer_params['weight_decay'],
-                             'momentum': optimizer_params['momentum']}] if args.model_name == "gcpl_seg" else []
+            list_params += [{'params': model.aspp.parameters(),
+                             'lr': 1e-2,
+                             'weight_decay': 5e-4,
+                             'momentum': 0.9}]
+
+            list_params += [{'params': model.low_level_conv.parameters(),
+                             'lr': 1e-2,
+                             'weight_decay': 5e-4,
+                             'momentum': 0.9}]
+
+            list_params += [{'params': model.seg_head.parameters(),
+                             'lr': 1e-2,
+                             'weight_decay': 5e-4,
+                             'momentum': 0.9}]
+
+            if prototypes is not None:
+                list_params += [{'params': prototypes,
+                                 'lr': 0.1,
+                                 'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
+
+                list_params += [{'params': model.fc,
+                                 'lr': 5e-4,
+                                 'betas': (0.9, 0.999)}] if args.model_name == "gcpl_seg" else []
+
         optimizer = SGD(list_params)
-
-    else:
-        raise ValueError(f"Invalid optimizer_type {args.optimizer_type}. Choices: ['Adam']")
 
     return optimizer
 
@@ -441,7 +464,6 @@ def colorise_label(arr):
     return np.transpose(grid, (1, 2, 0))
 
 
-
 class Visualiser:
     def __init__(self, dataset_name):
         if dataset_name == "cv":
@@ -583,3 +605,19 @@ class Visualiser:
             sleep(60)
 
         return
+
+from glob import glob
+def get_gt_labels(dataset_name):
+    if dataset_name == "cv":
+        dir_annot = "/scratch/shared/beegfs/gyungin/datasets/camvid/trainannot"
+        assert os.path.isdir(dir_annot)
+        path_gt_labels = f"{dir_annot}/*.png"
+        list_gt_labels = sorted(glob(path_gt_labels))
+
+    elif dataset_name == "cs":
+        dir_annot = "/scratch/shared/beegfs/gyungin/datasets/cityscapes_d4/gtFine/train"
+        assert os.path.isdir(dir_annot)
+        path_gt_labels = f"{dir_annot}/**/*.png"
+        list_gt_labels = sorted(glob(path_gt_labels))
+
+    return list_gt_labels
