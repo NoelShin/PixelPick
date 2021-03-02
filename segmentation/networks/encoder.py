@@ -14,7 +14,8 @@ resnet = {
     34: "../networks/backbones/pretrained/resnet34-pytorch.pth",
     # 50: "../networks/backbones/pretrained/resnet50-pytorch.pth",
     50: "/home/gishin-temp/projects/open_set/segmentation/networks/backbones/pretrained/resnet50-pytorch.pth",
-    101: "../networks/backbones/pretrained/resnet101-pytorch.pth"
+    101: "../networks/backbones/pretrained/resnet101-pytorch.pth",
+    "moco_v2": "../networks/backbones/pretrained/moco_v2_800ep_pretrain.pth.tar"
 }
 
 
@@ -30,16 +31,17 @@ class Encoder(nn.Module):
             # pretrained=resnet50[weight_type])
 
         else:
-            if use_dilated_resnet:
-                self.base = ResNetBackbone(backbone='resnet50_dilated8', pretrained=None)
+            self.base = ResNetBackbone(backbone='resnet50_dilated8', pretrained=None)
+            # if use_dilated_resnet:
+            #     self.base = ResNetBackbone(backbone='resnet50_dilated8', pretrained=None)
 
-            else:
-                model = ResNetBackbone(backbone='deepbase_resnet50_dilated8', pretrained=None)
-                self.base = nn.Sequential(nn.Sequential(model.prefix, model.maxpool),
-                                          model.layer1,
-                                          model.layer2,
-                                          model.layer3,
-                                          model.layer4)
+            # else:
+            #     model = ResNetBackbone(backbone='deepbase_resnet50_dilated8', pretrained=None)
+            #     self.base = nn.Sequential(nn.Sequential(model.prefix, model.maxpool),
+            #                               model.layer1,
+            #                               model.layer2,
+            #                               model.layer3,
+            #                               model.layer4)
 
         print(f"Encoder initialised with {weight_type} weights.")
 
@@ -50,7 +52,7 @@ class Encoder(nn.Module):
         return self.model.module.forward_backbone(x)
 
     def forward(self, x):
-        if self.weight_type in ["random", "supervised"]:
+        if self.weight_type in ["random", "supervised", "moco_v2"]:
             x = self.base(x)
 
         else:

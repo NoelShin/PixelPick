@@ -50,9 +50,6 @@ def main(args):
                                      learnable=args.model_name == "gcpl_seg",
                                      device=device)
 
-    if args.model_name == "mp_seg":
-        prototypes_updater = EMA(args.momentum_prototypes)
-
     criterion = get_criterion(args, device)
     optimizer = get_optimizer(args, model, prototypes=prototypes if not args.use_softmax else None)
     lr_scheduler = get_lr_scheduler(args, optimizer=optimizer, iters_per_epoch=len(dataloader))

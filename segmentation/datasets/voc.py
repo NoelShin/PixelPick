@@ -105,6 +105,7 @@ class VOC2012Segmentation:
             # varies from image to image thus can't use np.stack().
             self.arr_masks = list_masks
             pkl.dump(self.arr_masks, open(f"{self.dir_checkpoints}/0_query/label.pkl", 'wb'))
+
             self.n_pixels_total = n_pixels_total
             print("# labelled pixels used for training:", n_pixels_total)
 

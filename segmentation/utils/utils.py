@@ -1,4 +1,5 @@
 import os
+from glob import glob
 from shutil import make_archive, rmtree
 from time import sleep
 
@@ -7,6 +8,42 @@ import torch
 from torch.utils.data import DataLoader
 from PIL import Image
 import matplotlib.pyplot as plt
+from networks.model import FPNSeg
+from networks.deeplab import DeepLab
+
+
+def get_model(args):
+    if args.network_name == "FPN":
+        model = FPNSeg(args)
+        if args.n_layers == 50 and args.weight_type == "moco_v2":
+            # path to moco_v2 weights. Current path is relative to scripts dir
+            self_sup_weights = torch.load("../networks/backbones/pretrained/moco_v2_800ep_pretrain.pth.tar")["state_dict"]
+            model_state_dict = model.encoder.state_dict()
+
+            for k in list(self_sup_weights.keys()):
+                if k.replace("module.encoder_q.", '') in ["fc.0.weight", "fc.0.bias", "fc.2.weight", "fc.2.bias"]:
+                    self_sup_weights.pop(k)
+            for name, param in self_sup_weights.items():
+                name = name.replace("encoder_q.", '').replace("module", 'base')
+
+                if name.replace("base.", '') in ["conv1.weight", "bn1.weight", "bn1.bias", "bn1.running_mean",
+                                                 "bn1.running_var", "bn1.num_batches_tracked"]:
+                    name = name.replace("base", "base.prefix")
+
+                if name not in model_state_dict:
+                    print(f"{name} is not applied!")
+                    continue
+
+                if isinstance(param, torch.nn.Parameter):
+                    param = param.data
+                model_state_dict[name].copy_(param)
+            model.encoder.load_state_dict(model_state_dict)
+            print("moco_v2 weights are loaded successfully.")
+
+    elif args.network_name == "deeplab":
+        model = DeepLab(args)
+
+    return model
 
 
 def send_file(fp, file_name=None, remove_file=False):
@@ -606,8 +643,8 @@ class Visualiser:
 
         return
 
-from glob import glob
-def get_gt_labels(dataset_name):
+
+def get_gt_labels(dataset_name="cv", as_array=True):
     if dataset_name == "cv":
         dir_annot = "/scratch/shared/beegfs/gyungin/datasets/camvid/trainannot"
         assert os.path.isdir(dir_annot)
@@ -620,4 +657,11 @@ def get_gt_labels(dataset_name):
         path_gt_labels = f"{dir_annot}/**/*.png"
         list_gt_labels = sorted(glob(path_gt_labels))
 
-    return list_gt_labels
+    if as_array:
+        gt_labels = list()
+        for p in list_gt_labels:
+            gt_labels.append(np.array(Image.open(p)))
+        gt_labels = np.stack(gt_labels, axis=0)
+    else:
+        gt_labels = list_gt_labels
+    return gt_labels

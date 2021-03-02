@@ -12,8 +12,8 @@ from networks.model import FPNSeg
 from networks.deeplab import DeepLab
 from networks.modules import init_prototypes, init_radii, EMA
 from utils.metrics import prediction, eval_metrics, RunningScore
-from utils.utils import get_dataloader, get_criterion, get_optimizer, get_lr_scheduler, get_validator, AverageMeter
-from utils.utils import write_log, send_file, Visualiser, zip_dir
+from utils.utils import get_dataloader, get_model, get_criterion, get_optimizer, get_lr_scheduler, get_validator
+from utils.utils import AverageMeter, write_log, send_file, Visualiser, zip_dir
 from al_selectors.query import QuerySelector
 from criterions.contrastive_loss import get_dict_label_projection, compute_contrastive_loss
 
@@ -50,10 +50,13 @@ class Model:
         self.dataloader_val = get_dataloader(deepcopy(args), val=True, query=False,
                                              shuffle=False, batch_size=1, n_workers=args.n_workers)
 
-        if args.network_name == "FPN":
-            self.model = FPNSeg(args).to(self.device)
-        else:
-            self.model = DeepLab(args).to(self.device)
+        self.model = get_model(args).to(self.device)
+
+        # if args.network_name == "FPN":
+        #     self.model = FPNSeg(args).to(self.device)
+        # else:
+        #     self.model = DeepLab(args).to(self.device)
+
         self.criterion = get_criterion(args, self.device)
         self.lr_scheduler_type = args.lr_scheduler_type
 
@@ -307,10 +310,11 @@ class Model:
 
     def _train(self):
         print(f"\n ({self.experim_name}) training...\n")
-        if self.network_name == "FPN":
-            model = FPNSeg(self.args).to(self.device)
-        else:
-            model = DeepLab(self.args).to(self.device)
+        model = get_model(self.args).to(self.device)
+        # if self.network_name == "FPN":
+        #     model = FPNSeg(self.args).to(self.device)
+        # else:
+        #     model = DeepLab(self.args).to(self.device)
 
         prototypes = init_prototypes(self.n_classes, self.n_emb_dims, self.n_prototypes,
                                      mode='mean',

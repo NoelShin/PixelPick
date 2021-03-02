@@ -31,6 +31,7 @@ class QuerySelector:
         self.uncertainty_sampler = UncertaintySampler(args.query_strategy)
         self.use_openset = args.use_openset
         self.query_strategy = args.query_strategy
+        self.stride_total = args.stride_total
         self.use_cb_sampling = args.use_cb_sampling
         self.use_mc_dropout = args.use_mc_dropout
         self.vote_type = args.vote_type
@@ -71,13 +72,22 @@ class QuerySelector:
                 mask_void = (y == self.ignore_index)  # h x w
                 h, w = x.shape[2:]
 
+                # voc
+                if self.dataset_name == "voc":
+                    # h, w = y.shape[1:]
+                    from math import ceil
+                    pad_h = ceil(h / self.stride_total) * self.stride_total - h  # x.shape[2]
+                    pad_w = ceil(w / self.stride_total) * self.stride_total - w  # x.shape[3]
+                    x = F.pad(x, pad=(0, pad_w, 0, pad_h), mode='reflect')
+                #
+
                 # get uncertainty map
                 if self.use_mc_dropout:
                     uc_map = torch.zeros((h, w)).to(self.device)  # (h, w)
                     prob = torch.zeros((x.shape[0], self.n_classes, h, w)).to(self.device)  # b x c x h x w
                     # repeat for mc_n_steps times - set to 20 as a default
                     for step in range(self.mc_n_steps):
-                        prob_ = F.softmax(model(x)["pred"], dim=1)
+                        prob_ = F.softmax(model(x)["pred"], dim=1)[:, :, :h, :w]
 
                         uc_map_ = self.uncertainty_sampler(prob_).squeeze(dim=0)  # h x w
                         uc_map += uc_map_
@@ -86,7 +96,7 @@ class QuerySelector:
                     prob = prob / self.mc_n_steps
 
                 else:
-                    prob = F.softmax(model(x)["pred"], dim=1)
+                    prob = F.softmax(model(x)["pred"][:, :, :h, :w], dim=1)
 
                     uc_map = self.uncertainty_sampler(prob).squeeze(dim=0)  # h x w
 

@@ -81,9 +81,11 @@ class CamVidDataset(Dataset):
 
                 # save initial labelled pixels for a future reproduction
                 np.save(path_arr_masks, self.arr_masks)
-                self.n_pixels_total = self.arr_masks.sum()
-                print("# labelled pixels used for training:", self.n_pixels_total)
+
+            os.makedirs(f"{self.dir_checkpoints}/0_query", exist_ok=True)
             np.save(f"{self.dir_checkpoints}/0_query/label.npy", self.arr_masks)
+            self.n_pixels_total = self.arr_masks.sum()
+            print("# labelled pixels used for training:", self.n_pixels_total)
 
         self.use_ced = args.use_ced
         self.use_img_inp = args.use_img_inp

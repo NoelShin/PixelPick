@@ -87,9 +87,11 @@ class CityscapesDataset(Dataset):
 
                 # save initial labelled pixels for a future reproduction
                 np.save(path_arr_masks, self.arr_masks)
-                self.n_pixels_total = self.arr_masks.sum()
-                print("# labelled pixels used for training:", self.n_pixels_total)
+            self.n_pixels_total = self.arr_masks.sum()
+
+            os.makedirs(f"{self.dir_checkpoints}/0_query", exist_ok=True)
             np.save(f"{self.dir_checkpoints}/0_query/label.npy", self.arr_masks)
+            print("# labelled pixels used for training:", self.n_pixels_total)
 
         self.use_ced = args.use_ced
         self.use_img_inp = args.use_img_inp
@@ -103,14 +105,13 @@ class CityscapesDataset(Dataset):
         assert len(queries) == len(self.arr_masks), f"{queries.shape}, {self.arr_masks.shape}"
         previous = self.arr_masks.sum()
 
-        self.arr_masks = np.maximum(self.arr_masks, queries)
+        self.arr_masks = np.logical_or(self.arr_masks, queries)
 
-        try:
-            np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
-        except FileNotFoundError:
-            os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
-            np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
+        os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
+        np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
+
         new = self.arr_masks.sum()
+        self.n_pixels_total = new
         print("# labelled pixels is changed from {} to {} (delta: {})".format(previous, new, new - previous))
 
     def _geometric_augmentations(self, x, y, edge=None, merged_mask=None, x_blurred=None):

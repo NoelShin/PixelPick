@@ -222,6 +222,7 @@ class Arguments:
 
         list_keywords.append(args.network_name)
         list_keywords.append(f"{args.n_layers}") if args.network_name == "FPN" else None
+        list_keywords.append(f"{args.weight_type}") if args.network_name == "FPN" else None
 
         if args.use_softmax:
             list_keywords.append("sm")
@@ -252,13 +253,8 @@ class Arguments:
         list_keywords.append("oracle_cb_{}".format(args.n_pixels_by_oracle_cb)) if args.n_pixels_by_oracle_cb > 0 else None
         list_keywords.append("img_inp") if args.use_img_inp else None
         list_keywords.append("ced") if args.use_img_inp and args.use_ced else None
-        list_keywords.append("va") if args.use_visual_acuity else None
-        list_keywords.append("pseudo") if args.use_pseudo_label else None
-        list_keywords.append(f"{args.labelling_strategy}_k{args.window_size}") if args.use_pseudo_label else None
 
-        if args.use_contrastive_loss:
-            list_keywords.append(f"{args.selection_mode}_w{args.w_contrastive}_t{args.temperature}")
-            list_keywords.append(f"reg") if args.use_region_contrast else None
+        list_keywords.append("pseudo") if args.use_pseudo_label else None
 
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None
