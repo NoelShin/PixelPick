@@ -95,9 +95,10 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=1000, deep_base=False, norm_type=None):
+    def __init__(self, block, layers, width_multiplier=1.0, num_classes=1000, deep_base=False, norm_type=None):
         super(ResNet, self).__init__()
-        self.inplanes = 128 if deep_base else 64
+        self.inplanes = 128 if deep_base else int(64 * width_multiplier)
+        self.width_multiplier = width_multiplier
         if deep_base:
             self.prefix = nn.Sequential(OrderedDict([
                 ('conv1', nn.Conv2d(3, 64, kernel_size=3, stride=2, padding=1, bias=False)),
@@ -112,19 +113,20 @@ class ResNet(nn.Module):
             ))
         else:
             self.prefix = nn.Sequential(OrderedDict([
-                ('conv1', nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)),
+                ('conv1', nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)),
                 ('bn1', ModuleHelper.BatchNorm2d(norm_type=norm_type)(self.inplanes)),
                 ('relu', nn.ReLU(inplace=False))]
             ))
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=False)  # change.
 
-        self.layer1 = self._make_layer(block, 64, layers[0], norm_type=norm_type)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, norm_type=norm_type)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, norm_type=norm_type)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, norm_type=norm_type)
+        self.layer1 = self._make_layer(block, int(64 * width_multiplier), layers[0], norm_type=norm_type)
+        print(self.layer1)
+        self.layer2 = self._make_layer(block, int(128 * width_multiplier), layers[1], stride=2, norm_type=norm_type)
+        self.layer3 = self._make_layer(block, int(256 * width_multiplier), layers[2], stride=2, norm_type=norm_type)
+        self.layer4 = self._make_layer(block, int(512 * width_multiplier), layers[3], stride=2, norm_type=norm_type)
         self.avgpool = nn.AvgPool2d(7, stride=1)
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.fc = nn.Linear(int(512 * block.expansion * width_multiplier), num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -140,11 +142,13 @@ class ResNet(nn.Module):
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
-                ModuleHelper.BatchNorm2d(norm_type=norm_type)(planes * block.expansion),
+                ModuleHelper.BatchNorm2d(norm_type=norm_type)(int(planes * block.expansion * self.width_multiplier)),
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, norm_type=norm_type))
+        layers.append(block(self.inplanes, planes,
+                            stride, downsample, norm_type=norm_type))
+
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes, norm_type=norm_type))
@@ -213,7 +217,8 @@ def resnet50(num_classes=1000, pretrained=None, norm_type='batchnorm', **kwargs)
     Args:
         pretrained (bool): If True, returns a model pre-trained on Places
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, deep_base=False, norm_type=norm_type)
+    model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, deep_base=False, norm_type=norm_type,
+                   width_multiplier=kwargs["width_multiplier"])
     model = ModuleHelper.load_model(model, pretrained=pretrained)
     return model
 

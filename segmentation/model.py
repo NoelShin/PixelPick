@@ -8,9 +8,6 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from networks.model import FPNSeg
-from networks.deeplab import DeepLab
-from networks.modules import init_prototypes, init_radii, EMA
 from utils.metrics import prediction, eval_metrics, RunningScore
 from utils.utils import get_dataloader, get_model, get_criterion, get_optimizer, get_lr_scheduler, get_validator
 from utils.utils import AverageMeter, write_log, send_file, Visualiser, zip_dir
@@ -52,11 +49,6 @@ class Model:
 
         self.model = get_model(args).to(self.device)
 
-        # if args.network_name == "FPN":
-        #     self.model = FPNSeg(args).to(self.device)
-        # else:
-        #     self.model = DeepLab(args).to(self.device)
-
         self.criterion = get_criterion(args, self.device)
         self.lr_scheduler_type = args.lr_scheduler_type
 
@@ -76,6 +68,7 @@ class Model:
         self.n_emb_dims = args.n_emb_dims
         self.n_prototypes = args.n_prototypes
 
+        self.use_scribbles = args.use_scribbles
         self.use_visual_acuity = args.use_visual_acuity
         self.w_visual_acuity = args.w_visual_acuity
 
@@ -163,6 +156,9 @@ class Model:
                     self.nth_query = nth_query
 
                     model, prototypes = self._train()
+
+                    if self.use_scribbles:
+                        break
                     
                     # select queries using the current model and label them.
                     queries = self.query_selector(nth_query, model)
@@ -186,7 +182,7 @@ class Model:
                                                                                ignore_index=self.ignore_index,
                                                                                region_contrast=self.use_region_contrast)
 
-        rmtree(f"{self.dir_checkpoints}")
+        # rmtree(f"{self.dir_checkpoints}")
         return
 
     def _train_epoch(self, epoch, model, optimizer, lr_scheduler, prototypes=None, dict_label_projection=None):
@@ -311,18 +307,15 @@ class Model:
     def _train(self):
         print(f"\n ({self.experim_name}) training...\n")
         model = get_model(self.args).to(self.device)
-        # if self.network_name == "FPN":
-        #     model = FPNSeg(self.args).to(self.device)
-        # else:
-        #     model = DeepLab(self.args).to(self.device)
 
-        prototypes = init_prototypes(self.n_classes, self.n_emb_dims, self.n_prototypes,
-                                     mode='mean',
-                                     model=self.model,
-                                     dataset=self.dataloader_query.dataset,
-                                     ignore_index=self.ignore_index,
-                                     learnable=self.model_name == "gcpl_seg",
-                                     device=self.device) if self.use_openset else None
+        prototypes = None
+        # prototypes = init_prototypes(self.n_classes, self.n_emb_dims, self.n_prototypes,
+        #                              mode='mean',
+        #                              model=self.model,
+        #                              dataset=self.dataloader_query.dataset,
+        #                              ignore_index=self.ignore_index,
+        #                              learnable=self.model_name == "gcpl_seg",
+        #                              device=self.device) if self.use_openset else None
 
         optimizer = get_optimizer(self.args, model, prototypes=prototypes)
         lr_scheduler = get_lr_scheduler(self.args, optimizer=optimizer, iters_per_epoch=len(self.dataloader))

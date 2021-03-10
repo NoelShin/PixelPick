@@ -25,6 +25,7 @@ class VOC2012Segmentation:
         self.size_crop = (args.size_crop, args.size_crop)
         self.stride_total = args.stride_total
         self.use_softmax = args.use_softmax
+        self.use_scribbles = args.use_scribbles
 
         n_pixels_per_img = args.n_pixels_by_us
 
@@ -54,60 +55,72 @@ class VOC2012Segmentation:
         # generate masks
         self.arr_masks, self.n_pixels_total = None, -1
 
-        path_arr_masks = f"{args.dir_dataset}/init_labelled_pixels_{args.seed}.pkl"
-        if n_pixels_per_img != 0 and not val:
-            os.makedirs(f"{self.dir_checkpoints}/0_query", exist_ok=True)
+        if self.use_scribbles:
+            list_scribbles = sorted(glob(f"{args.dir_dataset}/scribbles/*.npy"))
+            scribbles = list()
             n_pixels_total = 0
-            if os.path.isfile(path_arr_masks):
-                list_masks = pkl.load(open(path_arr_masks, 'rb'))
-                for m in list_masks:
-                    n_pixels_total += m.sum()
-
-            else:
-                np.random.seed(args.seed)  # for future reproduction
-
-                list_masks = list()
-                for i in tqdm(range(len(self.voc))):
-                    label = self.voc[i][1]
-                    w, h = label.size
-                    n_pixels_per_img = h * w if n_pixels_per_img == 0 else n_pixels_per_img
-
-                    # generate masks whose size is set to base_size (longer side), i.e. 400x400 as default
-                    h, w = self._compute_base_size(h, w)
-
-                    mask = np.zeros((h, w), dtype=np.bool)
-                    mask_flat = mask.flatten()
-
-                    # filter void pixels - boundary pixels that the original labels have (fyi, 5 pixels thickness)
-                    label = label.resize((w, h), Image.NEAREST)  # note that downsampling method should be Image.NEAREST
-                    label = np.asarray(label, dtype=np.int32)
-
-                    label_flatten = label.flatten()
-                    ind_void_pixels = np.where(label_flatten == 255)[0]
-
-                    ind_non_void_pixels = np.setdiff1d(range(len(mask_flat)), ind_void_pixels)  # remove void pixels
-                    assert len(ind_non_void_pixels) <= len(mask_flat)
-
-                    # for a very rare case where the number of non_void_pixels is not large enough to sample from
-                    if len(ind_non_void_pixels) < n_pixels_per_img:
-                        n_pixels_per_img = len(ind_non_void_pixels)
-
-                    ind_chosen_pixels = np.random.choice(ind_non_void_pixels, n_pixels_per_img, replace=False)
-
-                    mask_flat[ind_chosen_pixels] += True
-                    mask = mask_flat.reshape((h, w))
-
-                    list_masks.append(mask)
-                    n_pixels_total += mask.sum()
-                pkl.dump(list_masks, open(f"{path_arr_masks}", 'wb'))
-
-            # note that unlike CamVid or Cityscapes where all images share the same spatial size, images of voc dataset
-            # varies from image to image thus can't use np.stack().
-            self.arr_masks = list_masks
-            pkl.dump(self.arr_masks, open(f"{self.dir_checkpoints}/0_query/label.pkl", 'wb'))
-
+            for s in list_scribbles:
+                scribble = np.load(s).astype(np.bool)
+                scribbles.append(scribble)
+                n_pixels_total += scribble.sum()
+            self.arr_masks = scribbles
             self.n_pixels_total = n_pixels_total
-            print("# labelled pixels used for training:", n_pixels_total)
+
+        else:
+            path_arr_masks = f"{args.dir_dataset}/init_labelled_pixels_{args.seed}.pkl"
+            if n_pixels_per_img != 0 and not val:
+                os.makedirs(f"{self.dir_checkpoints}/0_query", exist_ok=True)
+                n_pixels_total = 0
+                if os.path.isfile(path_arr_masks) and False:
+                    list_masks = pkl.load(open(path_arr_masks, 'rb'))
+                    for m in list_masks:
+                        n_pixels_total += m.sum()
+
+                else:
+                    np.random.seed(args.seed)  # for future reproduction
+
+                    list_masks = list()
+                    for i in tqdm(range(len(self.voc))):
+                        label = self.voc[i][1]
+                        w, h = label.size
+                        n_pixels_per_img = h * w if n_pixels_per_img == 0 else n_pixels_per_img
+
+                        # generate masks whose size is set to base_size (longer side), i.e. 400 as default
+                        h, w = self._compute_base_size(h, w)
+
+                        mask = np.zeros((h, w), dtype=np.bool)
+                        mask_flat = mask.flatten()
+
+                        # filter void pixels - boundary pixels that the original labels have (fyi, 5 pixels thickness)
+                        label = label.resize((w, h), Image.NEAREST)  # note that downsampling method should be Image.NEAREST
+                        label = np.asarray(label, dtype=np.int32)
+
+                        label_flatten = label.flatten()
+                        ind_void_pixels = np.where(label_flatten == 255)[0]
+
+                        ind_non_void_pixels = np.setdiff1d(range(len(mask_flat)), ind_void_pixels)  # remove void pixels
+                        assert len(ind_non_void_pixels) <= len(mask_flat)
+
+                        # for a very rare case where the number of non_void_pixels is not large enough to sample from
+                        if len(ind_non_void_pixels) < n_pixels_per_img:
+                            n_pixels_per_img = len(ind_non_void_pixels)
+
+                        ind_chosen_pixels = np.random.choice(ind_non_void_pixels, n_pixels_per_img, replace=False)
+
+                        mask_flat[ind_chosen_pixels] += True
+                        mask = mask_flat.reshape((h, w))
+
+                        list_masks.append(mask)
+                        n_pixels_total += mask.sum()
+                    pkl.dump(list_masks, open(f"{path_arr_masks}", 'wb'))
+
+                # note that unlike CamVid or Cityscapes where all images share the same spatial size, images of voc dataset
+                # varies from image to image thus can't use np.stack().
+                self.arr_masks = list_masks
+                pkl.dump(self.arr_masks, open(f"{self.dir_checkpoints}/0_query/label.pkl", 'wb'))
+
+                self.n_pixels_total = n_pixels_total
+                print("# labelled pixels used for training:", n_pixels_total)
 
         self.val, self.query = val, query
 

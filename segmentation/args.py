@@ -90,6 +90,7 @@ class Arguments:
                             choices=["random", "supervised", "moco_v2", "swav", "deepcluster_v2"])
         parser.add_argument("--use_dilated_resnet", type=bool, default=True, help="whether to use dilated resnet")
         parser.add_argument("--n_layers", type=int, default=50, choices=[18, 34, 50, 101], help="encoder (resnet) depth")
+        parser.add_argument("--width_multiplier", type=float, default=1.0)
 
         # hardness experiment
         parser.add_argument("--num_bin", type=int, default=0)
@@ -99,6 +100,12 @@ class Arguments:
 
         # diversity experim
         parser.add_argument("--diversity_ratio", type=float, default=1.0)
+
+        # spatial diversity
+        parser.add_argument("--lambda_sd", type=float, default=100)
+
+        parser.add_argument("--use_scribbles", action="store_true", default=False)
+
 
         self.parser = parser
 

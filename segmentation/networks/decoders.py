@@ -9,17 +9,18 @@ class FPNDecoder(nn.Module):
         n_classes = args.n_classes
         use_softmax = args.use_softmax
         use_img_inp = args.use_img_inp
+        width_multiplier = args.width_multiplier
         if args.n_layers in [18, 34]:
-            n_ch_0 = 512
-            n_ch_1 = 256
-            n_ch_2 = 128
-            n_ch_3 = 64
+            n_ch_0 = int(512 * width_multiplier)
+            n_ch_1 = int(256 * width_multiplier)
+            n_ch_2 = int(128 * width_multiplier)
+            n_ch_3 = int(64 * width_multiplier)
 
         elif args.n_layers in [50, 101]:
-            n_ch_0 = 2048
-            n_ch_1 = 1024
-            n_ch_2 = 512
-            n_ch_3 = 256
+            n_ch_0 = int(2048 * width_multiplier)
+            n_ch_1 = int(1024 * width_multiplier)
+            n_ch_2 = int(512 * width_multiplier)
+            n_ch_3 = int(256 * width_multiplier)
         else:
             raise ValueError(args.n_layers)
 

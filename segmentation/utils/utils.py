@@ -15,9 +15,15 @@ from networks.deeplab import DeepLab
 def get_model(args):
     if args.network_name == "FPN":
         model = FPNSeg(args)
-        if args.n_layers == 50 and args.weight_type == "moco_v2":
+
+        if args.weight_type == "moco_v2":
+            assert args.n_layers == 50, args.n_layers
             # path to moco_v2 weights. Current path is relative to scripts dir
-            self_sup_weights = torch.load("../networks/backbones/pretrained/moco_v2_800ep_pretrain.pth.tar")["state_dict"]
+            try:
+                self_sup_weights = torch.load("../networks/backbones/pretrained/moco_v2_800ep_pretrain.pth.tar")["state_dict"]
+            except FileNotFoundError:
+                self_sup_weights = torch.load("/home/gishin-temp/projects/open_set/segmentation/networks/backbones/pretrained/moco_v2_800ep_pretrain.pth.tar")["state_dict"]
+
             model_state_dict = model.encoder.state_dict()
 
             for k in list(self_sup_weights.keys()):
@@ -39,6 +45,77 @@ def get_model(args):
                 model_state_dict[name].copy_(param)
             model.encoder.load_state_dict(model_state_dict)
             print("moco_v2 weights are loaded successfully.")
+
+        if args.width_multiplier < 1.0:
+            state_dict = model.state_dict()
+            for n, p in state_dict.items():
+                # if n.find("downsample") != -1:
+                #     print(type(p), n, p.shape)
+                if n.find("num_batches_tracked") != -1:
+                    continue
+
+                if n.find("encoder") != -1:
+                    if len(p.shape) == 1:
+                        out_ch = p.shape[0]
+                        state_dict[n] = p[:int(out_ch * args.width_multiplier), ...]
+                    elif len(p.shape) == 4:
+                        out_ch, in_ch = p.shape[:2]
+                        # print(out_ch, in_ch)
+                        state_dict[n] = p[:int(out_ch * args.width_multiplier), :int(in_ch * args.width_multiplier), ...]
+                    else:
+                        raise ValueError(n, p.shape)
+                    # if any(map(lambda x: x != -1, map(n.find, ["bn", "running", "bias"]))):
+                    #
+                    # if n.find("bn") != -1 or n.find("bias") != -1 or n.find("downsample.1.weight") != -1:
+                    #     out_ch = p.shape[0]
+                    #     state_dict[n] = p[:int(out_ch * args.width_multiplier), ...]
+                    #
+                    # else:
+                    #     try:
+                    #         out_ch, in_ch = p.shape[:2]
+                    #         print(out_ch, in_ch)
+                    #         state_dict[n] = p[:int(out_ch * args.width_multiplier), :int(in_ch * args.width_multiplier), ...]
+                    #     except ValueError:
+                    #         raise ValueError(n, p.shape)
+                    # if n.find("weight") != -1 and n.find("bn") == -1 and n.find("downsample") == -1 and n.find("prefix.conv1.weight") == -1:
+                    #     out_ch, in_ch = p.shape[:2]
+                    #     print(out_ch, in_ch)
+                    #     state_dict[n] = p[:int(out_ch * args.width_multiplier), :int(in_ch * args.width_multiplier), ...]
+                    #
+                    # elif n.find("weight") != -1 and n.find("bn") == -1 and n.find("prefix.conv1.weight") == -1:
+                    #
+                    #
+                    # else:
+                    #     out_ch = p.shape[0]
+                    #     state_dict[n] = p[:int(out_ch * args.width_multiplier), ...]
+            for n, p in model.state_dict().items():
+                print(n, p.shape)
+            exit(12)
+            model = FPNSeg(args, load_pretrained=False)
+            m_s = model.state_dict()
+            for n, p in state_dict.items():
+                if n.find("downsample") != -1:
+                    print(n, m_s[n].shape, p.shape)
+            exit(12)
+            model.load_state_dict(state_dict)
+            print(f"Prunned model (width: {args.width_multiplier}) loaded.")
+            # m_s = model.state_dict()
+            # for n, p in state_dict.items():
+            #     print(n, m_s[n].shape, p.shape)
+            # exit(12)
+
+            # for n, p in model.named_parameters():
+            #     if n.find("encoder") != -1:
+            #         print(n, p.shape)
+                # if n.find("encoder") != -1:
+                #     n_ch = p.shape[0]
+                #     p = p[:int(n_ch * args.width_multiplier), ...]
+            # for n, p in model.named_parameters():
+            #     if n.find("encoder") != -1:
+            #         n_ch = p.shape[0]
+            #         p = p[:int(n_ch * args.width_multiplier), ...]
+        elif args.width_multiplier > 1.0:
+            pass
 
     elif args.network_name == "deeplab":
         model = DeepLab(args)

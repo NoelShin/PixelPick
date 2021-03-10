@@ -12,7 +12,8 @@ def sort_by(list_files, list_keywords):
     dict_files = dict()
     for k in list_keywords:
         for f in list_files:
-            if f.find(k) != -1:
+            print(k, f, re.search(k, f))
+            if re.search(k, f) is not None:  # f.find(k) != -1:
                 try:
                     dict_files[k].append(f)
                 except KeyError:
@@ -66,13 +67,17 @@ def get_files(dir_root, fname):
     return sorted(list_files)
 
 
-def plot_miou(dict_mious, ls="-", color="tab:blue", label=None, marker='^', unit=10):
-    xticks, yticks = [unit * (i + 1) for i in range(len(dict_mious.keys()))], [avg[0] for avg in dict_mious.values()]
+def plot_miou(dict_mious, xticks=None, ls="-", color="tab:blue", label=None, marker=None, unit=10, ms=1.0):
+    if xticks is None:
+        xticks = [unit * (i + 1) for i in range(len(dict_mious.keys()))]
+
+    yticks = [avg[0] for avg in dict_mious.values()]
     yerr = [avg[1] for avg in dict_mious.values()]
 
     # plot an errorbar
     # plt.errorbar(xticks, yticks, yerr, capsize=0, color=color, ls=ls, label=label)
-    plt.plot(xticks, yticks, color=color, ls=ls, label=label, marker=marker)
+    plt.plot(xticks, yticks, color=color, ls=ls, label=label, marker=marker, ms=ms)
+
     # optional: fill area between error ranges.
     data = {
         'x': xticks,
@@ -84,12 +89,13 @@ def plot_miou(dict_mious, ls="-", color="tab:blue", label=None, marker='^', unit
     plt.legend(loc="lower right", fancybox=False, framealpha=1., edgecolor='black')
 
 
-def plot_model(model, ls='-', color="tab:blue", marker='^', unit=10):
+def plot_model(model, keywords, **kwargs):
     list_files = get_files(f"{model}", fname="log_val.txt")
-    dict_files = sort_by(list_files, list_keywords=[f"_{i}_query" for i in range(10)])
+    dict_files = sort_by(list_files, list_keywords=keywords)
+
     dict_mious = compute_avg_miou(dict_files)
 
-    plot_miou(dict_mious, label=f"{model.split('/')[-1]}", ls=ls, color=color, unit=unit, marker=marker)
+    plot_miou(dict_mious, label=f"{model.split('/')[-1]}", **kwargs)
 
 
 if __name__ == '__main__':
@@ -97,22 +103,63 @@ if __name__ == '__main__':
     rcParams["font.family"] = "serif"
     rcParams["grid.linestyle"] = ':'
 
-    DATASET = "cs_d4"
+
+    DATASET = "cv"
 
     if DATASET == "cv":
         title = "CamVid"
         unit = 10
-        yrange = (0.4, 0.75)
+        yrange = () # (0.4, 0.75)
+
+        # plot_model(f"{DATASET}/FPN18", keywords=[f"random_{i}_" for i in range(10)],
+        #            color="r", unit=unit, marker='o')
+        # plot_model(f"{DATASET}/FPN34", keywords=[f"random_{i}_" for i in range(10)], color="y", unit=unit, marker='^')
+        # plot_model(f"{DATASET}/FPN50", keywords=[f"random_{i}_" for i in range(10)], color="g", unit=unit, marker='s')
+        plot_model(f"{DATASET}/FPN18",
+                   xticks=[*range(1, 10), *range(10, 110, 10)],
+                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [
+                       re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)],
+                   color="r", unit=unit)
+
+        plot_model(f"{DATASET}/FPN34",
+                   xticks=[*range(1, 10), *range(10, 110, 10)],
+                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [
+                       re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)],
+                   color="y", unit=unit)
+
+        plot_model(f"{DATASET}/FPN50",
+                   xticks=[*range(1, 10), *range(10, 110, 10)],
+                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [
+                       re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)],
+                   color="g", unit=unit)
+
+        plot_model(f"{DATASET}/FPN101",
+                   xticks=[*range(1, 10), *range(10, 110, 10)],
+                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)], # [f"_{i}_query" for i in range(10)], #[f"random_{i}_" for i in range(1, 11)],
+                   color="b", unit=unit)
+
+        gca = plt.gca().tick_params(which='both', direction="in")
 
     elif DATASET == "cs_d4":
         title = "Cityscapes"
         unit = 1
         yrange = ()
 
-    plot_model(f"{DATASET}/moco_v2", ls="--", color="b", unit=unit, marker='v')
-    plot_model(f"{DATASET}/sup", color="r", unit=unit)
+        plot_model(f"{DATASET}/FPN18", color="r", unit=unit, marker='o')
+        plot_model(f"{DATASET}/FPN34", color="y", unit=unit, marker='^')
 
-    # vote baselines
+    elif DATASET == "voc":
+        title = "PASCAL VOC 2012"
+        unit = 1
+        yrange = ()
+
+        # plot_model(f"{DATASET}/FPN18", keywords=[f"random_{i}_" for i in range(10)],
+        #            color="r", unit=unit, marker='o')
+        # plot_model(f"{DATASET}/FPN34", keywords=[f"random_{i}_" for i in range(10)],
+        #            color="y", unit=unit, marker='^')
+        plot_model(f"{DATASET}/FPN50", keywords=[f"random_{i}_" for i in [*range(10), 100, 1000]],
+                   color="g", unit=unit, marker='s')
+
     plt.title(f"{title}")
     plt.xlabel("# pixels per img")
 
@@ -120,6 +167,6 @@ if __name__ == '__main__':
     plt.ylim(*yrange)
 
     plt.tight_layout()
-    plt.savefig(f"self_vs_sup_{title}.png")
+    plt.savefig(f"depth_experim_{title}.png")
     plt.show()
 

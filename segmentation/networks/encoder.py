@@ -20,30 +20,23 @@ resnet = {
 
 
 class Encoder(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, load_pretrained):
         super(Encoder, self).__init__()
         weight_type = args.weight_type
         use_dilated_resnet = args.use_dilated_resnet
         n_layers = args.n_layers
 
-        if weight_type == "supervised":
-            self.base = ResNetBackbone(backbone=f'resnet{n_layers}_dilated8', pretrained=resnet[n_layers])
-            # pretrained=resnet50[weight_type])
+        if load_pretrained:
+            if weight_type == "supervised":
+                if load_pretrained:
+                    self.base = ResNetBackbone(backbone=f'resnet{n_layers}_dilated8', pretrained=resnet[n_layers])
+                    print(f"Encoder initialised with supervised weights.")
+            else:
+                self.base = ResNetBackbone(backbone='resnet50_dilated8', pretrained=None)
 
         else:
-            self.base = ResNetBackbone(backbone='resnet50_dilated8', pretrained=None)
-            # if use_dilated_resnet:
-            #     self.base = ResNetBackbone(backbone='resnet50_dilated8', pretrained=None)
-
-            # else:
-            #     model = ResNetBackbone(backbone='deepbase_resnet50_dilated8', pretrained=None)
-            #     self.base = nn.Sequential(nn.Sequential(model.prefix, model.maxpool),
-            #                               model.layer1,
-            #                               model.layer2,
-            #                               model.layer3,
-            #                               model.layer4)
-
-        print(f"Encoder initialised with {weight_type} weights.")
+            self.base = ResNetBackbone(backbone=f'resnet{n_layers}_dilated8', pretrained=None,
+                                       width_multiplier=args.width_multiplier)
 
         self.weight_type = weight_type
         self.use_fpn = use_dilated_resnet

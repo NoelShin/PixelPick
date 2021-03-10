@@ -88,7 +88,11 @@ class ModuleHelper(object):
             return model
 
         if not os.path.exists(pretrained):
-            raise FileNotFoundError('{} not exists.'.format(pretrained))
+            pretrained = pretrained.replace("..", "/home/gishin-temp/projects/open_set/segmentation")
+            if os.path.exists(pretrained):
+                pass
+            else:
+                raise FileNotFoundError('{} not exists.'.format(pretrained))
 
         print('Loading pretrained model:{}'.format(pretrained))
         if all_match:

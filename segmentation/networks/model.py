@@ -4,11 +4,11 @@ from networks.decoders import FPNDecoder
 
 
 class FPNSeg(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, load_pretrained=True):
         super(FPNSeg, self).__init__()
-        self.encoder = Encoder(args)
+        self.encoder = Encoder(args, load_pretrained)
         self.decoder = FPNDecoder(args)
-        print(self)
+        # print(self)
 
     def forward(self, x):
         z = self.encoder(x)
