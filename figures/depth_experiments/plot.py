@@ -18,6 +18,9 @@ def sort_by(list_files, list_keywords):
                     dict_files[k].append(f)
                 except KeyError:
                     dict_files.update({k: [f]})
+    # for k, v in dict_files.items():
+    #     print(k, v)
+    # exit(12)
     return dict_files
 
 
@@ -64,6 +67,7 @@ def get_files(dir_root, fname):
     for p in Path(dir_root).rglob(fname):
         list_files.append(os.path.abspath(p))
     assert len(list_files) > 0, f"There is no file name matched with {fname} in {dir_root}"
+
     return sorted(list_files)
 
 
@@ -95,7 +99,7 @@ def plot_model(model, keywords, **kwargs):
 
     dict_mious = compute_avg_miou(dict_files)
 
-    plot_miou(dict_mious, label=f"{model.split('/')[-1]}", **kwargs)
+    plot_miou(dict_mious, **kwargs)
 
 
 if __name__ == '__main__':
@@ -119,23 +123,27 @@ if __name__ == '__main__':
                    xticks=[*range(1, 10), *range(10, 110, 10)],
                    keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [
                        re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)],
+                   label="ResNet18",
                    color="r", unit=unit)
 
         plot_model(f"{DATASET}/FPN34",
                    xticks=[*range(1, 10), *range(10, 110, 10)],
                    keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [
                        re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)],
+                   label="ResNet34",
                    color="y", unit=unit)
 
         plot_model(f"{DATASET}/FPN50",
                    xticks=[*range(1, 10), *range(10, 110, 10)],
                    keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [
                        re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)],
+                   label="ResNet50",
                    color="g", unit=unit)
 
         plot_model(f"{DATASET}/FPN101",
                    xticks=[*range(1, 10), *range(10, 110, 10)],
                    keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)], # [f"_{i}_query" for i in range(10)], #[f"random_{i}_" for i in range(1, 11)],
+                   label="ResNet101",
                    color="b", unit=unit)
 
         gca = plt.gca().tick_params(which='both', direction="in")
@@ -157,10 +165,27 @@ if __name__ == '__main__':
         #            color="r", unit=unit, marker='o')
         # plot_model(f"{DATASET}/FPN34", keywords=[f"random_{i}_" for i in range(10)],
         #            color="y", unit=unit, marker='^')
-        plot_model(f"{DATASET}/FPN50", keywords=[f"random_{i}_" for i in [*range(10), 100, 1000]],
+        plot_model(f"{DATASET}/FPN18",
+                   keywords=[f"random_{i}_" for i in [*range(1, 11), 100, 1000]], #[f"random_1_2_{i}" for i in range(10)] + [f"random_{i}_2_0_query" for i in [100, 1000]],
+                   xticks=[i for i in [*range(1, 11), 100, 1000]],
+                   label="ResNet18",
+                   color="r", unit=unit, marker='s')
+
+        plot_model(f"{DATASET}/FPN34",
+                   keywords=[f"random_{i}_" for i in [*range(1, 11), 100, 1000]], # [f"random_1_2_{i}" for i in range(10)] + [f"random_{i}_2_0_query" for i in [100, 1000]],
+                   xticks=[i for i in [*range(1, 11), 100, 1000]],
+                   label="ResNet34",
+                   color="y", unit=unit, marker='s')
+
+        plot_model(f"{DATASET}/FPN50",
+                   keywords=[f"random_{i}_" for i in [*range(1, 11), 100, 1000]],  # + [f"random_1_2_{i}" for i in range(10)]
+                   xticks=[i for i in [*range(1, 11), 100, 1000]],
+                   label="ResNet50",
                    color="g", unit=unit, marker='s')
 
-    plt.title(f"{title}")
+        plt.xscale("log")
+
+    # plt.title(f"{title}")
     plt.xlabel("# pixels per img")
 
     plt.grid()

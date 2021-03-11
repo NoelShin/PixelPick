@@ -101,14 +101,15 @@ class CityscapesDataset(Dataset):
         self.val = val
         self.query = query
 
-    def label_queries(self, queries, nth_query):
+    def label_queries(self, queries, nth_query=None):
         assert len(queries) == len(self.arr_masks), f"{queries.shape}, {self.arr_masks.shape}"
         previous = self.arr_masks.sum()
 
         self.arr_masks = np.logical_or(self.arr_masks, queries)
 
-        os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
-        np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
+        if nth_query is not None:
+            os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
+            np.save(f"{self.dir_checkpoints}/{nth_query}_query/label.npy", self.arr_masks)
 
         new = self.arr_masks.sum()
         self.n_pixels_total = new

@@ -150,8 +150,6 @@ if __name__ == '__main__':
 
         plt.figure(figsize=(7, 5))
 
-
-
         plot_model(f"{DATASET}/deeplab_v3/ms",
                    label="PixelPick (Ours, MobileNetv2)",
                    # label="PixelPick (DeepLabv3+)",
@@ -255,8 +253,12 @@ if __name__ == '__main__':
 
         plot_model(f"cs_d4/fpn50/ms",
                    label="PixelPick (Ours, ResNet50)",
-                   xticks=[i / (256 * 512) * 100 for i in range(1, 8, 1)],
+                   xticks=[i / (256 * 512) * 100 for i in range(1, 11, 1)],
                    color="darkblue", ls='-', unit=unit, marker='o', ms=3.5)
+
+        plt.plot([3.356, 6.644, 9.932, 11.575, 13.185, 14.760, 16.370, 17.877, 19.418],
+                 [0.492, 0.534, 0.559, 0.583, 0.583, 0.590, 0.592, 0.594, 0.599],
+                 marker='o', ls='--', label="CEREAL (ResNet50)", color='purple', ms=3.5)
 
         plt.plot([1, 2, 3, 6, 9, 12, 15], [0.4242, 0.4880, 0.5184, 0.5713, 0.5890, 0.6065, 0.6185],
                  marker='o', ls='--', label="EquAL (ResNet50)", color='green', ms=3.5)
@@ -269,16 +271,73 @@ if __name__ == '__main__':
         plt.xscale("log")
         plt.xlabel("% annotation")
 
-    elif DATASET == "voc":
-        title = "PASCAL VOC 2012"
-        unit = 1
-        yrange = ()
+    # elif DATASET == "voc":
+    #     title = "PASCAL VOC 2012"
+    #     unit = 1
+    #     yrange = ()
+    #
+    #     plot_model(f"{DATASET}/deeplab_v3/rand", color="tab:blue", unit=unit, marker='o')
+    #     plot_model(f"{DATASET}/deeplab_v3/ms", color="tab:green", unit=unit, marker='^')
+    #     plot_model(f"{DATASET}/deeplab_v3/ent", color="tab:red", unit=unit, marker='s')
+    #     plot_model(f"{DATASET}/deeplab_v3/lc", color="tab:purple", unit=unit, marker='p')
+    #     plt.xlabel("# pixels per img")
 
-        plot_model(f"{DATASET}/deeplab_v3/rand", color="tab:blue", unit=unit, marker='o')
-        plot_model(f"{DATASET}/deeplab_v3/ms", color="tab:green", unit=unit, marker='^')
-        plot_model(f"{DATASET}/deeplab_v3/ent", color="tab:red", unit=unit, marker='s')
-        plot_model(f"{DATASET}/deeplab_v3/lc", color="tab:purple", unit=unit, marker='p')
-        plt.xlabel("# pixels per img")
+    elif mode == 3:
+        title = "deeplab_comp"
+        unit = 10
+        yrange = ()
+        # yrange = (0.35, 0.65)
+        plt.figure(figsize=(7, 5))
+
+        plot_model(f"{DATASET}/deeplab_v3/rand",
+                   label="RAND",
+                   fill_between=False,
+                   xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
+                   color="gray", unit=unit, marker='o')
+
+        plot_model(f"{DATASET}/deeplab_v3/ms",
+                   label="MS",
+                   fill_between=False,
+                   xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
+                   color="b", unit=unit, ls='-', marker='o', ms=3.5)
+
+        plot_model(f"{DATASET}/deeplab_v3/ent",
+                   label="ENT",
+                   fill_between=False,
+                   xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
+                   color="r", unit=unit, ls='-', marker='o', ms=3.5)
+
+        plot_model(f"{DATASET}/deeplab_v3/lc",
+                   label="LC",
+                   fill_between=False,
+                   xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
+                   color="g", unit=unit, ls='-', marker='o', ms=3.5)
+
+        plot_model(f"{DATASET}/deeplab_v3/ms_vote",
+                   label="vote MS",
+                   fill_between=False,
+                   xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
+                   color="b", unit=unit, ls='--', marker='o', ms=3.5)
+
+        plot_model(f"{DATASET}/deeplab_v3/ent_vote",
+                   label="vote ENT",
+                   fill_between=False,
+                   xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
+                   color="r", unit=unit, ls='--', marker='o', ms=3.5)
+
+        plot_model(f"{DATASET}/deeplab_v3/lc_vote",
+                   label="vote LC",
+                   fill_between=False,
+                   xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
+                   color="g", unit=unit, ls='--', marker='o', ms=3.5)
+
+        draw_hline(f"{DATASET}/deeplab_v3/full", "Fully-sup", xmin=5e-3, xmax=0.06, alpha=1.0, c='k', ls="-.")
+
+        gca = plt.gca()
+        gca.tick_params(direction='in', which='both')
+        plt.legend(loc="lower right", fancybox=False, framealpha=1., edgecolor='black')
+        # plt.xscale("log")
+        plt.xlabel("% annotation")
 
     # plt.title(f"{title}")
 

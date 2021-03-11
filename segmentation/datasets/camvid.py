@@ -95,10 +95,7 @@ class CamVidDataset(Dataset):
         # pseudo-label
         self.use_pseudo_label = args.use_pseudo_label
         self.pseudo_label_flag = False
-        if self.use_pseudo_label:
-            from pseudo_labelling.local_sim import LocalSimilarity
-            self.local_similarity = LocalSimilarity(args)
-            self.pseudo_labels = None
+        self.pseudo_labels = None
 
         self.val = val
         self.query = query
@@ -119,7 +116,7 @@ class CamVidDataset(Dataset):
         self.n_pixels_total = new
         print("# labelled pixels is changed from {} to {} (delta: {})".format(previous, new, new - previous))
 
-    def _geometric_augmentations(self, x, y, edge=None, ced=None):
+    def _geometric_augmentations(self, x, y, edge=None, pseudo_label=None):
         if self.geometric_augmentations["random_scale"]:
             w, h = x.size
             rs = uniform(0.5, 2.0)
@@ -131,8 +128,8 @@ class CamVidDataset(Dataset):
             if edge is not None:
                 edge = TF.resize(edge, (h_resized, w_resized), Image.NEAREST)
 
-            if ced is not None:
-                ced = TF.resize(ced, (h_resized, w_resized), Image.NEAREST)
+            if pseudo_label is not None:
+                ced = TF.resize(pseudo_label, (h_resized, w_resized), Image.NEAREST)
 
         if self.geometric_augmentations["crop"]:
             w, h = x.size
@@ -146,8 +143,8 @@ class CamVidDataset(Dataset):
             if edge is not None:
                 edge = TF.pad(edge, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
 
-            if ced is not None:
-                ced = TF.pad(ced, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
+            if pseudo_label is not None:
+                pseudo_label = TF.pad(pseudo_label, (0, 0, pad_w, pad_h), fill=11, padding_mode="constant")
 
             w, h = x.size
             start_h = randint(0, h - self.crop_size[0])
@@ -157,8 +154,8 @@ class CamVidDataset(Dataset):
             y = TF.crop(y, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
             if edge is not None:
                 edge = TF.crop(edge, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
-            if ced is not None:
-                ced = TF.crop(ced, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
+            if pseudo_label is not None:
+                pseudo_label = TF.crop(pseudo_label, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
 
         if self.geometric_augmentations["random_hflip"]:
             if random() > 0.5:
@@ -167,18 +164,18 @@ class CamVidDataset(Dataset):
                 if edge is not None:
                     edge = TF.hflip(edge)
 
-                if ced is not None:
-                    ced = TF.hflip(ced)
+                if pseudo_label is not None:
+                    ced = TF.hflip(pseudo_label)
 
         if edge is not None:
             edge = torch.from_numpy(np.asarray(edge, dtype=np.uint8) // 255)
         else:
             edge = torch.tensor(0)
 
-        if ced is None:
-            ced = torch.tensor(0)
+        if pseudo_label is None:
+            pseudo_label = torch.tensor(0)
 
-        return x, y, edge, ced
+        return x, y, edge, pseudo_label
 
     def _photometric_augmentations(self, x):
         if self.photometric_augmentations["random_color_jitter"]:
@@ -276,9 +273,9 @@ class CamVidDataset(Dataset):
                 list_pseudo_labels.extend(self.local_similarity(emb, y, mask, window_size))
 
         self.pseudo_labels = torch.stack(list_pseudo_labels, dim=0).cpu().numpy().astype(np.uint8)
-        self.local_similarity.print()
-        self.local_similarity.write(fp=f"{self.dir_checkpoints}/{nth_query}_query/pr.txt")
-        self.local_similarity.reset_metrics()
+        # self.local_similarity.print()
+        # self.local_similarity.write(fp=f"{self.dir_checkpoints}/{nth_query}_query/pr.txt")
+        # self.local_similarity.reset_metrics()
 
     def __getitem__(self, ind):
         dict_data = dict()
@@ -296,13 +293,11 @@ class CamVidDataset(Dataset):
             else:
                 mask = None
 
-            x, y, mask, ced = self._geometric_augmentations(x, y, edge=mask)
+            x, y, mask, plabel = self._geometric_augmentations(x, y, edge=mask, pseudo_label=self.pseudo_labels)
 
             x = self._photometric_augmentations(x)
 
-            # if self.geometric_augmentations["random_scale"]:
-            #     dict_data.update({"pad_size": self.pad_size})
-            dict_data.update({'mask': mask})
+            dict_data.update({'mask': mask, 'plabel': torch.tensor(np.asarray(plabel, np.int64), dtype=torch.long)})
 
             x = TF.to_tensor(x)
             x = TF.normalize(x, self.mean, self.std)

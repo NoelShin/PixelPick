@@ -106,7 +106,7 @@ if __name__ == '__main__':
     rcParams["font.family"] = "serif"
     rcParams["grid.linestyle"] = ':'
 
-    DATASET = "cs_d4"
+    DATASET = "cv"
 
     if DATASET == "cv":
         title = "CamVid"
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     # plot_model(f"{DATASET}/sup", fname="val_log.txt", color="r", unit=unit)
 
     # vote baselines
-    plt.title(f"{title}")
+    # plt.title(f"{title}")
     plt.xlabel("# pixels per img")
 
     plt.xscale('log')
