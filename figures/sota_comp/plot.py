@@ -69,7 +69,7 @@ def get_files(dir_root, fname):
 def plot_miou(dict_mious,
               xticks=None,
               ls="-", color="tab:blue", label=None, marker='^', unit=10, ms=1.0,
-              fill_between=True):
+              fill_between=True, scatter=False):
     if xticks is None:
         xticks = [unit * (i + 1) for i in range(len(dict_mious.keys()))]
     yticks = [avg[0] for avg in dict_mious.values()]
@@ -77,7 +77,11 @@ def plot_miou(dict_mious,
 
     # plot an errorbar
     # plt.errorbar(xticks, yticks, yerr, capsize=0, color=color, ls=ls, label=label)
-    plt.plot(xticks, yticks, color=color, ls=ls, label=label, marker=marker, ms=ms)
+    if scatter:
+        plt.scatter(xticks, yticks, color=color, label=label, marker=marker, s=ms)
+
+    else:
+        plt.plot(xticks, yticks, color=color, ls=ls, label=label, marker=marker, ms=ms)
     # optional: fill area between error ranges.
     if fill_between:
         data = {
@@ -135,7 +139,7 @@ if __name__ == '__main__':
     rcParams["font.family"] = "serif"
     rcParams["grid.linestyle"] = ':'
 
-    DATASET = "cv"
+    DATASET = "voc"
     mode = 2
 
     if mode == 0:
@@ -150,26 +154,30 @@ if __name__ == '__main__':
 
         plt.figure(figsize=(7, 5))
 
-        plot_model(f"{DATASET}/deeplab_v3/ms",
+        plot_model(f"cv/deeplab_v3/ms",
                    label="PixelPick (Ours, MobileNetv2)",
                    # label="PixelPick (DeepLabv3+)",
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
                    color="b", unit=unit, ls='--', marker='o', ms=3.5)
 
-        plot_model(f"{DATASET}/fpn50/ms",
+        plot_model(f"cv/fpn50/ms",
                    label="PixelPick (Ours, ResNet50)",
                    # label="PixelPick (FPN50)",
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
                    color="darkblue", ls='-', unit=unit, marker='o', ms=3.5)
 
-        plot_model(f"{DATASET}/deeplab_v3/deal",
-                   list_keywords=[f"_runs_{i:03d}" for i in range(1, 11)],
-                   label="DEAL (MobileNetv2)",
-                   # label="DEAL (DeepLabv3+)",
-                   xticks=[i for i in range(1, 11)],
-                   color="y", unit=unit, marker='o', ms=3.5)
+        # plot_model(f"cv/deeplab_v3/deal",
+        #            list_keywords=[f"_runs_{i:03d}" for i in range(1, 11)],
+        #            label="DEAL (MobileNetv2, reimp.)",
+        #            # label="DEAL (DeepLabv3+)",
+        #            xticks=[i for i in range(1, 11)],
+        #            color="y", unit=unit, marker='o', ms=3.5)
 
-        draw_hline(f"{DATASET}/fpn50/full", "Fully-sup (ResNet50)", xmin=5e-3, xmax=40, alpha=1.0, c='k', ls="-.")
+        # DEAL original
+        plt.plot([10, 15, 20, 25, 30, 35, 40], [0.516, 0.557, 0.576, 0.587, 0.6, 0.613, 0.616],
+                 marker='o', ls='--', label="DEAL (Origin.)", color='r', ms=3.5)
+
+        draw_hline(f"cv/fpn50/full", "Fully-sup (ResNet50)", xmin=5e-3, xmax=40, alpha=1.0, c='k', ls="-.")
         # 5e-3
         plt.plot([8, 12, 16, 20, 24], [0.567, 0.6182, 0.6274, 0.6341, 0.6385],
                  marker='o', ls='--', label="EquAL (ResNet50)", color='g', ms=3.5)
@@ -180,10 +188,11 @@ if __name__ == '__main__':
 
         gca = plt.gca()
         gca.tick_params(direction='in', which='both')
-        plt.legend(loc="lower left", fancybox=False, framealpha=1., edgecolor='black')
+        plt.legend(loc="lower right", fancybox=False, framealpha=1., edgecolor='black')
         # plt.legend(loc='lower right', fancybox=False, framealpha=1., edgecolor='black')
         # plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fancybox=False, framealpha=1., edgecolor='black')
         # plt.xlim(-2, 25)
+        plt.ylim(0.35, 0.7)
         plt.xscale("log")
         plt.xlabel("% annotation")
 
@@ -246,15 +255,28 @@ if __name__ == '__main__':
         yrange = ()
 
         plt.figure(figsize=(7, 5))
-        plot_model(f"cs_d4/deeplab_v3/ms",
+        # plot_model(f"cs_d4/deeplab_v3/ms",
+        #            label="PixelPick-1 (Ours, MobileNetv2)",
+        #            xticks=[i / (256 * 512) * 100 for i in range(1, 11, 1)],
+        #            color="blue", unit=unit, ls='--', marker='o', ms=3.5)
+        #
+        # plot_model(f"cs_d4/fpn50/ms",
+        #            label="PixelPick-1 (Ours, ResNet50)",
+        #            xticks=[i / (256 * 512) * 100 for i in range(1, 11, 1)],
+        #            color="darkblue", unit=unit, ls='--', marker='o', ms=3.5)
+
+        plot_model(f"cs_d4/deeplab_v3/ms_10",
                    label="PixelPick (Ours, MobileNetv2)",
-                   xticks=[i / (256 * 512) * 100 for i in range(1, 11, 1)],
+                   xticks=[i * 10 / (256 * 512) * 100 for i in range(1, 11, 1)],
                    color="blue", unit=unit, ls='--', marker='o', ms=3.5)
 
-        plot_model(f"cs_d4/fpn50/ms",
+        plot_model(f"cs_d4/fpn50/ms_10",
                    label="PixelPick (Ours, ResNet50)",
-                   xticks=[i / (256 * 512) * 100 for i in range(1, 11, 1)],
+                   xticks=[i * 10 / (256 * 512) * 100 for i in range(1, 11, 1)],
                    color="darkblue", ls='-', unit=unit, marker='o', ms=3.5)
+
+        plt.plot([10, 15, 20, 25, 30, 35, 40], [0.509, 0.552, 0.572, 0.588, 0.6, 0.613, 0.620],
+                 marker='o', ls='--', label="DEAL (Origin.)", color='r', ms=3.5)
 
         plt.plot([3.356, 6.644, 9.932, 11.575, 13.185, 14.760, 16.370, 17.877, 19.418],
                  [0.492, 0.534, 0.559, 0.583, 0.583, 0.590, 0.592, 0.594, 0.599],
@@ -267,22 +289,40 @@ if __name__ == '__main__':
 
         plt.plot([50 / 2975 * 100, 100 / 2975 * 100], [0.35, 0.401], label="CCT (ResNet50)", marker='o', color="red", ms=3.5)
 
-        plt.legend()
+        plt.ylim(-0.15, 0.7)
+        plt.yticks(np.arange(0., 0.7, 0.1))
+        plt.legend(loc='lower left', fancybox=False, framealpha=1., edgecolor='black')
         plt.xscale("log")
         plt.xlabel("% annotation")
 
-    # elif DATASET == "voc":
-    #     title = "PASCAL VOC 2012"
-    #     unit = 1
-    #     yrange = ()
-    #
-    #     plot_model(f"{DATASET}/deeplab_v3/rand", color="tab:blue", unit=unit, marker='o')
-    #     plot_model(f"{DATASET}/deeplab_v3/ms", color="tab:green", unit=unit, marker='^')
-    #     plot_model(f"{DATASET}/deeplab_v3/ent", color="tab:red", unit=unit, marker='s')
-    #     plot_model(f"{DATASET}/deeplab_v3/lc", color="tab:purple", unit=unit, marker='p')
-    #     plt.xlabel("# pixels per img")
-
     elif mode == 3:
+        title = "PASCAL VOC 2012"
+        unit = 1
+        yrange = ()
+
+        # plot_model(f"{DATASET}/deeplab_v3/rand", color="tab:blue", unit=unit, marker='o')
+        plot_model(f"{DATASET}/deeplab_v3/ms", color="blue", unit=unit, marker='o', ms=3.5,
+                   label="PixelPick (Ours, MobileNetv2)")
+        # plot_model(f"{DATASET}/deeplab_v3/ent", color="tab:red", unit=unit, marker='s')
+        # plot_model(f"{DATASET}/deeplab_v3/lc", color="tab:purple", unit=unit, marker='p')
+
+        plot_model(f"{DATASET}/fpn50/ms", color="darkblue", unit=unit, marker='o', ms=3.5,
+                   label="PixelPick (Ours, ResNet50)")
+
+        plt.plot([(169787200 * 2 / 3) / 1464, 169787200 / 1464], [0.64, 0.694], label="CCT (ResNet50)", marker='s',
+                 color="red", ms=3.5)
+        plt.scatter(169787200 / 1464, 0.732, label="CCT+ (ResNet50)", marker='s', color="darkred", s=12)
+
+        plot_model(f"{DATASET}/scribble/",
+                   xticks=[786982 / 1464],
+                   color="purple",
+                   unit=unit,
+                   scatter=True,
+                   marker='^', ms=20, label="Scribble (ResNet50)")
+        plt.xscale("log")
+        plt.xlabel("# pixels per img")
+
+    elif mode == 4:
         title = "deeplab_comp"
         unit = 10
         yrange = ()
@@ -339,7 +379,85 @@ if __name__ == '__main__':
         # plt.xscale("log")
         plt.xlabel("% annotation")
 
-    # plt.title(f"{title}")
+    elif mode == 5:
+        title = "voc_deeplab_comp"
+        unit = 1
+        yrange = ()
+        # yrange = (0.35, 0.65)
+        plt.figure(figsize=(7, 5))
+
+        plot_model(f"voc/deeplab_v3/rand",
+                   label="RAND",
+                   fill_between=False,
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(1, 11, 1)],
+                   color="gray", unit=unit, marker='o')
+
+        plot_model(f"voc/deeplab_v3/ms",
+                   label="MS",
+                   fill_between=False,
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(1, 11, 1)],
+                   color="b", unit=unit, ls='-', marker='o', ms=3.5)
+
+        plot_model(f"voc/deeplab_v3/ent",
+                   label="ENT",
+                   fill_between=False,
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(1, 11, 1)],
+                   color="r", unit=unit, ls='-', marker='o', ms=3.5)
+
+        plot_model(f"voc/deeplab_v3/lc",
+                   label="LC",
+                   fill_between=False,
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(1, 11, 1)],
+                   color="g", unit=unit, ls='-', marker='o', ms=3.5)
+
+        # draw_hline(f"{DATASET}/deeplab_v3/full", "Fully-sup", xmin=5e-3, xmax=0.06, alpha=1.0, c='k', ls="-.")
+
+        gca = plt.gca()
+        gca.tick_params(direction='in', which='both')
+        gca.ticklabel_format(axis='x', style="sci", scilimits=(0, 0))
+        plt.legend(loc="lower right", fancybox=False, framealpha=1., edgecolor='black')
+        # plt.xscale("log")
+        plt.xlabel("% annotation")
+
+    elif mode == 6:
+        title = "cs_deeplab_comp"
+        unit = 1
+        yrange = ()
+        # yrange = (0.35, 0.65)
+        plt.figure(figsize=(7, 5))
+
+        plot_model(f"cs_d4/deeplab_v3/rand",
+                   label="RAND",
+                   fill_between=False,
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(1, 11, 1)],
+                   color="gray", unit=unit, marker='o')
+
+        plot_model(f"cs_d4/deeplab_v3/ms",
+                   label="MS",
+                   fill_between=False,
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(1, 11, 1)],
+                   color="b", unit=unit, ls='-', marker='o', ms=3.5)
+
+        plot_model(f"cs_d4/deeplab_v3/ent",
+                   label="ENT",
+                   fill_between=False,
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(1, 11, 1)],
+                   color="r", unit=unit, ls='-', marker='o', ms=3.5)
+
+        plot_model(f"cs_d4/deeplab_v3/lc",
+                   label="LC",
+                   fill_between=False,
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(1, 11, 1)],
+                   color="g", unit=unit, ls='-', marker='o', ms=3.5)
+
+        # draw_hline(f"{DATASET}/deeplab_v3/full", "Fully-sup", xmin=5e-3, xmax=0.06, alpha=1.0, c='k', ls="-.")
+
+        gca = plt.gca()
+        gca.tick_params(direction='in', which='both')
+        gca.ticklabel_format(axis='x', style="sci", scilimits=(0, 0))
+        plt.legend(loc="lower right", fancybox=False, framealpha=1., edgecolor='black')
+        # plt.xscale("log")
+        plt.xlabel("% annotation")
 
     plt.grid()
     plt.ylim(*yrange)

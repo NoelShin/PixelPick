@@ -71,7 +71,7 @@ class VOC2012Segmentation:
             if n_pixels_per_img != 0 and not val:
                 os.makedirs(f"{self.dir_checkpoints}/0_query", exist_ok=True)
                 n_pixels_total = 0
-                if os.path.isfile(path_arr_masks) and False:
+                if os.path.isfile(path_arr_masks) and True:
                     list_masks = pkl.load(open(path_arr_masks, 'rb'))
                     for m in list_masks:
                         n_pixels_total += m.sum()
@@ -121,6 +121,13 @@ class VOC2012Segmentation:
 
                 self.n_pixels_total = n_pixels_total
                 print("# labelled pixels used for training:", n_pixels_total)
+
+        # total_pixels = 0
+        # for m in self.arr_masks:
+        #     total_pixels += np.prod(m.shape)
+        #     assert m.shape[0] <= 400 and m.shape[1] <= 400, m.shape
+        # print(total_pixels)
+        # exit(12)
 
         self.val, self.query = val, query
 

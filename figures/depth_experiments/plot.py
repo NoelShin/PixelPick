@@ -107,8 +107,7 @@ if __name__ == '__main__':
     rcParams["font.family"] = "serif"
     rcParams["grid.linestyle"] = ':'
 
-
-    DATASET = "cv"
+    DATASET = "cs_d4"
 
     if DATASET == "cv":
         title = "CamVid"
@@ -121,8 +120,8 @@ if __name__ == '__main__':
         # plot_model(f"{DATASET}/FPN50", keywords=[f"random_{i}_" for i in range(10)], color="g", unit=unit, marker='s')
         plot_model(f"{DATASET}/FPN18",
                    xticks=[*range(1, 10), *range(10, 110, 10)],
-                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [
-                       re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)],
+                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(10)] + [
+                       re.compile(r"random_{:d}_\d_0_query".format(i)) for i in [100, 1000, 10000]],
                    label="ResNet18",
                    color="r", unit=unit)
 
@@ -153,8 +152,31 @@ if __name__ == '__main__':
         unit = 1
         yrange = ()
 
-        plot_model(f"{DATASET}/FPN18", color="r", unit=unit, marker='o')
-        plot_model(f"{DATASET}/FPN34", color="y", unit=unit, marker='^')
+        # plot_model(f"{DATASET}/FPN18", color="r", unit=unit, marker='o')
+        # plot_model(f"{DATASET}/FPN34", color="y", unit=unit, marker='^')
+        # plot_model(f"{DATASET}/FPN34", color="y", unit=unit, marker='^')
+
+        plot_model(f"{DATASET}/FPN18",
+                   xticks=[*range(1, 11)] + [100, 1000, 10000],
+                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(10)] + [
+                       re.compile(r"random_{:d}_\d_0_query".format(i)) for i in [100, 1000, 10000]],
+                   label="ResNet18",
+                   color="r", unit=unit)
+
+        plot_model(f"{DATASET}/FPN34",
+                   xticks=[*range(1, 11)] + [100, 1000, 10000],
+                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(10)] + [
+                       re.compile(r"random_{:d}_\d_0_query".format(i)) for i in [100, 1000, 10000]],
+                   label="ResNet34",
+                   color="y", unit=unit)
+
+        plot_model(f"{DATASET}/FPN50",
+                   xticks=[*range(1, 11)] + [100, 1000, 10000],
+                   keywords=[re.compile(r"random_{:d}_\d_0_query".format(i)) for i in range(1, 11)] + [
+                       re.compile(r"random_{:d}_\d_0_query".format(i)) for i in [100, 1000, 10000]],
+                   label="ResNet50",
+                   color="g", unit=unit)
+        plt.xscale('log')
 
     elif DATASET == "voc":
         title = "PASCAL VOC 2012"

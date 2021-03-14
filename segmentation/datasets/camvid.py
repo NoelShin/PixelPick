@@ -97,6 +97,11 @@ class CamVidDataset(Dataset):
         self.pseudo_label_flag = False
         self.pseudo_labels = None
 
+        # error label
+        if args.simulate_error:
+            self.arr_masks_err = np.zeros((367, 360, 480), dtype=np.bool)
+            self.n_pixels_total_err = 0
+
         self.val = val
         self.query = query
 
@@ -116,7 +121,23 @@ class CamVidDataset(Dataset):
         self.n_pixels_total = new
         print("# labelled pixels is changed from {} to {} (delta: {})".format(previous, new, new - previous))
 
-    def _geometric_augmentations(self, x, y, edge=None, pseudo_label=None):
+    def update_error_queries(self, queries_err, nth_query=None):
+        assert len(queries_err) == len(self.arr_masks_err), f"{queries_err.shape}, {self.arr_masks.shape}"
+        previous = self.arr_masks_err.sum()
+        self.arr_masks_err = np.maximum(self.arr_masks_err, queries_err)
+
+        if isinstance(nth_query, int):
+            try:
+                np.save(f"{self.dir_checkpoints}/{nth_query}_query/label_err.npy", self.arr_masks_err)
+            except FileNotFoundError:
+                os.makedirs(f"{self.dir_checkpoints}/{nth_query}_query", exist_ok=True)
+                np.save(f"{self.dir_checkpoints}/{nth_query}_query/label_err.npy", self.arr_masks_err)
+
+        new = self.arr_masks_err.sum()
+        self.n_pixels_total_err = new
+        print("# error pixels is changed from {} to {} (delta: {})".format(previous, new, new - previous))
+
+    def _geometric_augmentations(self, x, y, edge=None, mask_err=None, pseudo_label=None):
         if self.geometric_augmentations["random_scale"]:
             w, h = x.size
             rs = uniform(0.5, 2.0)
@@ -127,6 +148,9 @@ class CamVidDataset(Dataset):
 
             if edge is not None:
                 edge = TF.resize(edge, (h_resized, w_resized), Image.NEAREST)
+
+            if mask_err is not None:
+                mask_err = TF.resize(mask_err, (h_resized, w_resized), Image.NEAREST)
 
             if pseudo_label is not None:
                 ced = TF.resize(pseudo_label, (h_resized, w_resized), Image.NEAREST)
@@ -143,6 +167,9 @@ class CamVidDataset(Dataset):
             if edge is not None:
                 edge = TF.pad(edge, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
 
+            if mask_err is not None:
+                mask_err = TF.pad(mask_err, (0, 0, pad_w, pad_h), fill=0, padding_mode="constant")
+
             if pseudo_label is not None:
                 pseudo_label = TF.pad(pseudo_label, (0, 0, pad_w, pad_h), fill=11, padding_mode="constant")
 
@@ -154,6 +181,10 @@ class CamVidDataset(Dataset):
             y = TF.crop(y, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
             if edge is not None:
                 edge = TF.crop(edge, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
+
+            if mask_err is not None:
+                mask_err = TF.crop(mask_err, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
+
             if pseudo_label is not None:
                 pseudo_label = TF.crop(pseudo_label, top=start_h, left=start_w, height=self.crop_size[0], width=self.crop_size[1])
 
@@ -164,6 +195,9 @@ class CamVidDataset(Dataset):
                 if edge is not None:
                     edge = TF.hflip(edge)
 
+                if mask_err is not None:
+                    mask_err = TF.hflip(mask_err)
+
                 if pseudo_label is not None:
                     ced = TF.hflip(pseudo_label)
 
@@ -172,10 +206,15 @@ class CamVidDataset(Dataset):
         else:
             edge = torch.tensor(0)
 
+        if mask_err is not None:
+            mask_err = torch.from_numpy(np.asarray(mask_err, dtype=np.uint8) // 255)
+        else:
+            mask_err = torch.tensor(0)
+
         if pseudo_label is None:
             pseudo_label = torch.tensor(0)
 
-        return x, y, edge, pseudo_label
+        return x, y, edge, mask_err, pseudo_label
 
     def _photometric_augmentations(self, x):
         if self.photometric_augmentations["random_color_jitter"]:
@@ -288,16 +327,18 @@ class CamVidDataset(Dataset):
             x = TF.normalize(x, self.mean, self.std)
 
         else:
-            if self.arr_masks is not None:
-                mask = Image.fromarray(self.arr_masks[ind].astype(np.uint8) * 255)
-            else:
-                mask = None
-
-            x, y, mask, plabel = self._geometric_augmentations(x, y, edge=mask, pseudo_label=self.pseudo_labels)
+            mask = Image.fromarray(self.arr_masks[ind].astype(np.uint8) * 255) if self.arr_masks is not None else None
+            mask_err = Image.fromarray(self.arr_masks_err[ind].astype(np.uint8) * 255) if self.arr_masks_err is not None else None
+            x, y, mask, mask_err, plabel = self._geometric_augmentations(x, y,
+                                                                         edge=mask,
+                                                                         mask_err=mask_err,
+                                                                         pseudo_label=self.pseudo_labels)
 
             x = self._photometric_augmentations(x)
 
-            dict_data.update({'mask': mask, 'plabel': torch.tensor(np.asarray(plabel, np.int64), dtype=torch.long)})
+            dict_data.update({'mask': mask,
+                              'mask_err': mask_err,
+                              'plabel': torch.tensor(np.asarray(plabel, np.int64), dtype=torch.long)})
 
             x = TF.to_tensor(x)
             x = TF.normalize(x, self.mean, self.std)

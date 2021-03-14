@@ -122,7 +122,30 @@ class QuerySelector:
 
         # Update labels for query dataloader. Note that this does not update labels for training dataloader.
         self.dataloader.dataset.label_queries(queries, nth_query + 1)
-        return queries
+        if self.args.simulate_error:
+            queries_err = list()
+            for q in queries:
+                h, w = q.shape
+                q_flat = q.flatten()
+                q_err = np.zeros_like(q_flat)
+                ind_q = np.where(q_flat)[0]
+
+                q_err[np.random.choice(ind_q, int(self.n_pixels_by_us // 10), False)] = True
+
+                queries_err.append(q_err.reshape(h, w))
+
+            # b, h, w = queries.shape
+            # queries_flat = queries.flatten()
+            # queries_err = np.zeros_like(queries_flat)
+            # ind_queries = np.where(queries_flat)[0]
+            #
+            # queries_err[np.random.choice(ind_queries, int(self.n_pixels_by_us // 10), False)] = True
+            queries_err = np.stack(queries_err, axis=0)  # note that currently simulate_error applies only on CamVid
+            self.dataloader.dataset.update_error_queries(queries_err, nth_query + 1)
+        else:
+            queries_err = None
+
+        return queries, queries_err
 
 
 class UncertaintySampler:

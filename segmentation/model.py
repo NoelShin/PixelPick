@@ -120,8 +120,10 @@ class Model:
                     write_log(f"{self.log_val}", header=["epoch", "mIoU", "pixel_acc"])
 
                     # select queries using the current model and label them.
-                    queries = self.query_selector(nth_query, model)
+                    queries, queries_err = self.query_selector(nth_query, model)
                     self.dataloader.dataset.label_queries(queries, nth_query)
+                    if self.dataset_name == "cv" and self.args.simulate_error:
+                        self.dataloader.dataset.update_error_queries(queries_err, nth_query)
 
                     # pseudo-labelling based on the current labels
                     if self.use_pseudo_label:
@@ -161,8 +163,11 @@ class Model:
                         break
                     
                     # select queries using the current model and label them.
-                    queries = self.query_selector(nth_query, model)
+                    queries, queries_err = self.query_selector(nth_query, model)
                     self.dataloader.dataset.label_queries(queries, nth_query + 1)
+
+                    if self.dataset_name == "cv" and self.args.simulate_error:
+                        self.dataloader.dataset.update_error_queries(queries_err, nth_query)
 
                     # zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
                     # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
@@ -205,6 +210,14 @@ class Model:
             if self.n_pixels_per_img != 0:
                 mask = dict_data['mask'].to(self.device, torch.bool)
                 y.flatten()[~mask.flatten()] = self.ignore_index
+
+                if self.args.simulate_error:
+                    mask_err = dict_data['mask_err'].to(self.device, torch.bool)
+                    gt_points = y.flatten()[mask_err.flatten()]
+                    # replace labels on error points with a random incorrect label.
+                    random_error = [np.random.choice(list(set(range(self.n_classes)) - {gt_p.cpu().numpy().item()}), 1)[0] for gt_p in gt_points]
+                    y.flatten()[mask_err.flatten()] = torch.tensor(np.array(random_error).astype(np.int64)).to(self.device)
+                    assert all(gt_points.cpu().numpy() != y.flatten()[mask_err.flatten()].cpu().numpy())
 
                 if self.use_pseudo_label and self.nth_query > 0:
                     y_pseudo = dict_data["y_pseudo"].to(self.device)
@@ -309,13 +322,6 @@ class Model:
         model = get_model(self.args).to(self.device)
 
         prototypes = None
-        # prototypes = init_prototypes(self.n_classes, self.n_emb_dims, self.n_prototypes,
-        #                              mode='mean',
-        #                              model=self.model,
-        #                              dataset=self.dataloader_query.dataset,
-        #                              ignore_index=self.ignore_index,
-        #                              learnable=self.model_name == "gcpl_seg",
-        #                              device=self.device) if self.use_openset else None
 
         optimizer = get_optimizer(self.args, model, prototypes=prototypes)
         lr_scheduler = get_lr_scheduler(self.args, optimizer=optimizer, iters_per_epoch=len(self.dataloader))

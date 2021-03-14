@@ -92,13 +92,13 @@ def plot_model(model,
                fname="log_val.txt",
                list_keywords=[f"_{i}_query" for i in range(10)],
                xticks=None,
-               ls='-', color="tab:blue", marker='^', unit=10):
+               ls='-', color="tab:blue", marker='^', unit=10, label=None):
     list_files = get_files(f"{model}", fname=fname)
     dict_files = sort_by(list_files, list_keywords=list_keywords)
     dict_mious = compute_avg_miou(dict_files)
 
     plot_miou(dict_mious, xticks=xticks,
-              label=f"{model.split('/')[-1]}", ls=ls, color=color, unit=unit, marker=marker)
+              label=label, ls=ls, color=color, unit=unit, marker=marker)
 
 
 if __name__ == '__main__':
@@ -114,11 +114,13 @@ if __name__ == '__main__':
         yrange = () # (0.4, 0.75)
 
         plot_model(f"{DATASET}/moco_v2",
+                   label="MoCov2",
                    fname="val_log.txt",
                    list_keywords=[f"-{i}-" for i in [*list(range(1, 10)), 20, 50, 100, 1000, 10000]],
                    xticks=[*list(range(1, 10)), 20, 50, 100, 1000, 10000], ls="--", color="b", unit=unit, marker='v')
 
         plot_model(f"{DATASET}/sup",
+                   label="Supervised",
                    fname="val_log.txt",
                    list_keywords=[f"-{i}-" for i in [*list(range(1, 10)), 20, 50, 100, 1000, 10000]],
                    xticks=[*list(range(1, 10)), 20, 50, 100, 1000, 10000], ls="--", color="r", unit=unit, marker='v')
@@ -130,11 +132,13 @@ if __name__ == '__main__':
 
         plot_model(f"{DATASET}/moco_v2",
                    fname="log_val.txt",
+                   label="MoCov2",
                    list_keywords=[f"random_{i}_" for i in [*list(range(1, 11)), 100, 1000, 10000]],
                    xticks=[*list(range(1, 11)), 100, 1000, 10000], ls="--", color="b", unit=unit, marker='v')
 
         plot_model(f"{DATASET}/sup",
                    fname="log_val.txt",
+                   label="Supervised",
                    list_keywords=[f"random_{i}_" for i in [*list(range(1, 11)), 100, 1000, 10000]],
                    xticks=[*list(range(1, 11)), 100, 1000, 10000], ls="--", color="r", unit=unit, marker='^')
 

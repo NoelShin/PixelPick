@@ -96,7 +96,7 @@ class Arguments:
         parser.add_argument("--num_bin", type=int, default=0)
 
         # top n percent
-        parser.add_argument("--top_n_percent", type=float, default=0.)
+        parser.add_argument("--top_n_percent", type=float, default=0.05)
 
         # diversity experim
         parser.add_argument("--diversity_ratio", type=float, default=1.0)
@@ -106,6 +106,7 @@ class Arguments:
 
         parser.add_argument("--use_scribbles", action="store_true", default=False)
 
+        parser.add_argument("--simulate_error", action="store_true", default=False)
 
         self.parser = parser
 
@@ -230,36 +231,17 @@ class Arguments:
         list_keywords.append(args.network_name)
         list_keywords.append(f"{args.n_layers}") if args.network_name == "FPN" else None
         list_keywords.append(f"{args.weight_type}") if args.network_name == "FPN" else None
-
-        if args.use_softmax:
-            list_keywords.append("sm")
-
-        elif args.model_name == "gcpl_seg":
-            list_keywords.append("gcpl_seg")
-            list_keywords.append(f"k_{args.n_prototypes}")
-            list_keywords.append(f"n_emb_dims_{args.n_emb_dims}")
-
-            if args.use_pl:
-                list_keywords.append("pl")
-                list_keywords.append(str(args.w_pl))
-
-            if args.use_repl:
-                list_keywords.append("repl")
-                list_keywords.append(str(args.w_repl))
-
-            if args.use_vl:
-                list_keywords.append("vl")
-                list_keywords.append(str(args.w_vl))
+        list_keywords.append("sm")
 
         # query strategy
         list_keywords.append(f"{args.query_strategy}") if args.n_pixels_by_us > 0 else None
         list_keywords.append(f"{args.vote_type}") if args.use_mc_dropout else None
         list_keywords.append(f"{args.n_pixels_by_us}")
         list_keywords.append(f"p{args.top_n_percent}") if args.top_n_percent > 0. and args.n_pixels_by_us > 0 else None
+        list_keywords.append("err") if args.simulate_error else None
+
         list_keywords.append("cb") if args.use_cb_sampling else None
         list_keywords.append("oracle_cb_{}".format(args.n_pixels_by_oracle_cb)) if args.n_pixels_by_oracle_cb > 0 else None
-        list_keywords.append("img_inp") if args.use_img_inp else None
-        list_keywords.append("ced") if args.use_img_inp and args.use_ced else None
 
         list_keywords.append("pseudo") if args.use_pseudo_label else None
 

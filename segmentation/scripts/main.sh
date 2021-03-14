@@ -1,6 +1,7 @@
 #!/home/gishin-temp/bin/sh
-python3 ../main_al.py  --suffix 'scr' --dataset_name 'voc' --query_strategy 'random' --n_pixels_by_us 10 --network_name "deeplab" --n_layers 50 --seed 0 --use_scribbles
-python3 ../main_al.py  --suffix 'scr' --dataset_name 'voc' --query_strategy 'random' --n_pixels_by_us 10 --network_name "deeplab" --n_layers 50 --seed 1 --use_scribbles
-python3 ../main_al.py  --suffix 'scr' --dataset_name 'voc' --query_strategy 'random' --n_pixels_by_us 10 --network_name "deeplab" --n_layers 50 --seed 2 --use_scribbles
-python3 ../main_al.py  --suffix 'scr' --dataset_name 'voc' --query_strategy 'random' --n_pixels_by_us 10 --network_name "deeplab" --n_layers 50 --seed 3 --use_scribbles
-python3 ../main_al.py  --suffix 'scr' --dataset_name 'voc' --query_strategy 'random' --n_pixels_by_us 10 --network_name "deeplab" --n_layers 50 --seed 4 --use_scribbles
+python3 ../main_al.py  --suffix '' --dataset_name 'cv' --n_pixels_by_us 10 --query_strategy 'margin_sampling' --simulate_error --seed 0
+
+#python3 ../main_al.py  --suffix '' --dataset_name 'voc' --n_pixels_by_us 0 --network_name "deeplab" --seed 1
+#python3 ../main_al.py  --suffix '' --dataset_name 'voc' --n_pixels_by_us 0 --network_name "deeplab" --seed 2
+#python3 ../main_al.py  --suffix '' --dataset_name 'voc' --n_pixels_by_us 0 --network_name "deeplab" --seed 3
+#python3 ../main_al.py  --suffix '' --dataset_name 'voc' --n_pixels_by_us 0 --network_name "deeplab" --seed 4
