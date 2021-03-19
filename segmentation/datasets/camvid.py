@@ -101,6 +101,8 @@ class CamVidDataset(Dataset):
         if args.simulate_error:
             self.arr_masks_err = np.zeros((367, 360, 480), dtype=np.bool)
             self.n_pixels_total_err = 0
+        else:
+            self.arr_masks_err = None
 
         self.val = val
         self.query = query

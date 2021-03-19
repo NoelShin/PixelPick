@@ -85,7 +85,7 @@ def plot_miou(dict_mious,
     }
     plt.fill_between(**data, alpha=0.15, color=color)
     plt.ylabel("mIoU")
-    plt.legend(loc="lower right", fancybox=False, framealpha=1., edgecolor='black')
+    # plt.legend(loc="lower right", fancybox=False, framealpha=1., edgecolor='black')
 
 
 def plot_model(model,
@@ -101,29 +101,62 @@ def plot_model(model,
               label=label, ls=ls, color=color, unit=unit, marker=marker)
 
 
+def draw_hline(dir_root, model_name, xmin, xmax, c='b', ls='--', alpha=1.0):
+    list_txt_files = sorted(glob(os.path.join(dir_root, '**/val_log.txt'), recursive=True))
+    dict_model_values = {model_name: list()}
+    for txt_file in list_txt_files:
+        list_mious = list()
+        with open(txt_file, 'r') as f:
+            csv_reader = reader(f)
+            for i, line in enumerate(csv_reader):
+                if i == 0:
+                    try:
+                        ind_miou = line.index("mIoU")
+                    except ValueError:
+                        ind_miou = line.index("miou")
+                    assert ind_miou != -1
+                    continue
+
+                list_mious.append(float(line[ind_miou]))
+
+            best_miou = np.max(list_mious)
+            dict_model_values[model_name].append(best_miou)
+    plt.hlines(np.mean(dict_model_values[model_name]), xmin=xmin, xmax=xmax, color=c, ls=ls, label=model_name, alpha=alpha)
+
+
 if __name__ == '__main__':
     # plt.plot(figsize=(7, 5))
     rcParams["font.family"] = "serif"
     rcParams["grid.linestyle"] = ':'
+    rcParams["font.size"] = 16
+
+    # rcParams["axes.labelsize"] = 16
+    # rcParams["xtick.labelsize"] = 12
 
     DATASET = "cv"
 
     if DATASET == "cv":
         title = "CamVid"
         unit = 10
-        yrange = () # (0.4, 0.75)
+        yrange = (0.0, 0.75)
 
+        draw_hline("cv/moco_v2/full", "MoCov2 (100% annot.)", xmin=1, xmax=1e+4, alpha=1.0, c='k', ls="-.")
         plot_model(f"{DATASET}/moco_v2",
                    label="MoCov2",
                    fname="val_log.txt",
                    list_keywords=[f"-{i}-" for i in [*list(range(1, 10)), 20, 50, 100, 1000, 10000]],
-                   xticks=[*list(range(1, 10)), 20, 50, 100, 1000, 10000], ls="--", color="b", unit=unit, marker='v')
+                   xticks=[*list(range(1, 10)), 20, 50, 100, 1000, 10000], ls="-", color="b", unit=unit, marker='v')  # , 360 * 480
 
+        draw_hline("cv/sup/full", "Supervised (100% annot.)", xmin=1, xmax=1e+4, alpha=1.0, c='k', ls="--")
         plot_model(f"{DATASET}/sup",
                    label="Supervised",
                    fname="val_log.txt",
                    list_keywords=[f"-{i}-" for i in [*list(range(1, 10)), 20, 50, 100, 1000, 10000]],
-                   xticks=[*list(range(1, 10)), 20, 50, 100, 1000, 10000], ls="--", color="r", unit=unit, marker='v')
+                   xticks=[*list(range(1, 10)), 20, 50, 100, 1000, 10000], ls="-", color="r", unit=unit, marker='^')
+
+        gca = plt.gca()
+        gca.tick_params(direction='in', which='both')
+        plt.legend(loc="lower right", fancybox=False, framealpha=1., edgecolor='black')
 
     elif DATASET == "cs_d4":
         title = "Cityscapes"
@@ -156,18 +189,17 @@ if __name__ == '__main__':
                    fname="val_log.txt",
                    list_keywords=[f"-{i}-" for i in [*list(range(1, 10)), 20, 50, 100, 1000, 10000]],
                    xticks=[*list(range(1, 10)), 20, 50, 100, 1000, 10000], ls="--", color="r", unit=unit, marker='v')
-
     # plot_model(f"{DATASET}/sup", fname="val_log.txt", color="r", unit=unit)
 
     # vote baselines
     # plt.title(f"{title}")
-    plt.xlabel("# pixels per img")
+    plt.xlabel("# labelled pixels per image")
 
     plt.xscale('log')
     plt.grid()
     plt.ylim(*yrange)
 
-    plt.tight_layout()
-    plt.savefig(f"self_vs_sup_{title}.png")
+    plt.tight_layout(pad=0.1)
+    plt.savefig(f"self_vs_sup_{title}.pdf")
     plt.show()
 

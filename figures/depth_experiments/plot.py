@@ -102,17 +102,43 @@ def plot_model(model, keywords, **kwargs):
     plot_miou(dict_mious, **kwargs)
 
 
+def draw_hline(dir_root, model_name, xmin, xmax, c='b', ls='--', alpha=1.0):
+    list_txt_files = sorted(glob(os.path.join(dir_root, '**/log_val.txt'), recursive=True))
+    dict_model_values = {model_name: list()}
+    for txt_file in list_txt_files:
+        list_mious = list()
+        with open(txt_file, 'r') as f:
+            csv_reader = reader(f)
+            for i, line in enumerate(csv_reader):
+                if i == 0:
+                    try:
+                        ind_miou = line.index("mIoU")
+                    except ValueError:
+                        ind_miou = line.index("miou")
+                    assert ind_miou != -1
+                    continue
+
+                list_mious.append(float(line[ind_miou]))
+            print(list_mious)
+            best_miou = np.max(list_mious)
+            dict_model_values[model_name].append(best_miou)
+    print("fully sup:", np.mean(dict_model_values[model_name]))
+    plt.hlines(np.mean(dict_model_values[model_name]), xmin=xmin, xmax=xmax, color=c, ls=ls, label=model_name, alpha=alpha)
+
+
 if __name__ == '__main__':
     # plt.plot(figsize=(7, 5))
     rcParams["font.family"] = "serif"
     rcParams["grid.linestyle"] = ':'
+    rcParams["font.size"] = 16
 
-    DATASET = "cs_d4"
+    DATASET = "voc"
 
     if DATASET == "cv":
         title = "CamVid"
         unit = 10
-        yrange = () # (0.4, 0.75)
+        yrange = (0., 0.7)
+        draw_hline(f"cv/FPN50_full", "ResNet50 (100% annot.)", xmin=0, xmax=100, alpha=1.0, c='k', ls="--")
 
         # plot_model(f"{DATASET}/FPN18", keywords=[f"random_{i}_" for i in range(10)],
         #            color="r", unit=unit, marker='o')
@@ -120,8 +146,8 @@ if __name__ == '__main__':
         # plot_model(f"{DATASET}/FPN50", keywords=[f"random_{i}_" for i in range(10)], color="g", unit=unit, marker='s')
         plot_model(f"{DATASET}/FPN18",
                    xticks=[*range(1, 10), *range(10, 110, 10)],
-                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(10)] + [
-                       re.compile(r"random_{:d}_\d_0_query".format(i)) for i in [100, 1000, 10000]],
+                   keywords=[re.compile(r"random_1_\d_{:d}_query".format(i)) for i in range(9)] + [
+                       re.compile(r"random_10_\d_{:d}_query".format(i)) for i in range(10)],
                    label="ResNet18",
                    color="r", unit=unit)
 
@@ -181,39 +207,49 @@ if __name__ == '__main__':
     elif DATASET == "voc":
         title = "PASCAL VOC 2012"
         unit = 1
-        yrange = ()
+        yrange = (0, 0.75)
 
         # plot_model(f"{DATASET}/FPN18", keywords=[f"random_{i}_" for i in range(10)],
         #            color="r", unit=unit, marker='o')
         # plot_model(f"{DATASET}/FPN34", keywords=[f"random_{i}_" for i in range(10)],
         #            color="y", unit=unit, marker='^')
+        draw_hline(f"voc/FPN50_full", "ResNet50 (100% annot.)", xmin=1, xmax=1000, alpha=1.0, c='k', ls="--")
+
         plot_model(f"{DATASET}/FPN18",
                    keywords=[f"random_{i}_" for i in [*range(1, 11), 100, 1000]], #[f"random_1_2_{i}" for i in range(10)] + [f"random_{i}_2_0_query" for i in [100, 1000]],
                    xticks=[i for i in [*range(1, 11), 100, 1000]],
                    label="ResNet18",
-                   color="r", unit=unit, marker='s')
+                   color="r", unit=unit)
 
         plot_model(f"{DATASET}/FPN34",
                    keywords=[f"random_{i}_" for i in [*range(1, 11), 100, 1000]], # [f"random_1_2_{i}" for i in range(10)] + [f"random_{i}_2_0_query" for i in [100, 1000]],
                    xticks=[i for i in [*range(1, 11), 100, 1000]],
                    label="ResNet34",
-                   color="y", unit=unit, marker='s')
+                   color="y", unit=unit)
 
         plot_model(f"{DATASET}/FPN50",
                    keywords=[f"random_{i}_" for i in [*range(1, 11), 100, 1000]],  # + [f"random_1_2_{i}" for i in range(10)]
                    xticks=[i for i in [*range(1, 11), 100, 1000]],
                    label="ResNet50",
-                   color="g", unit=unit, marker='s')
+                   color="g", unit=unit)
+
+        plot_model(f"{DATASET}/FPN101",
+                   keywords=[f"random_{i}_" for i in [*range(1, 11), 100, 1000]],
+                   # + [f"random_1_2_{i}" for i in range(10)]
+                   xticks=[i for i in [*range(1, 11), 100, 1000]],
+                   label="ResNet101",
+                   color="b", unit=unit)
 
         plt.xscale("log")
+        gca = plt.gca().tick_params(which='both', direction="in")
 
     # plt.title(f"{title}")
-    plt.xlabel("# pixels per img")
+    plt.xlabel("# labelled pixels per image")
 
     plt.grid()
     plt.ylim(*yrange)
 
-    plt.tight_layout()
-    plt.savefig(f"depth_experim_{title}.png")
+    plt.tight_layout(pad=0.1)
+    plt.savefig(f"depth_experim_{title}.pdf")
     plt.show()
 

@@ -74,6 +74,7 @@ def plot_miou(dict_mious,
         xticks = [unit * (i + 1) for i in range(len(dict_mious.keys()))]
     yticks = [avg[0] for avg in dict_mious.values()]
     yerr = [avg[1] for avg in dict_mious.values()]
+    print(label, yticks)
 
     # plot an errorbar
     # plt.errorbar(xticks, yticks, yerr, capsize=0, color=color, ls=ls, label=label)
@@ -128,9 +129,10 @@ def draw_hline(dir_root, model_name, xmin, xmax, c='b', ls='--', alpha=1.0):
                     continue
 
                 list_mious.append(float(line[ind_miou]))
-
+            print(list_mious)
             best_miou = np.max(list_mious)
             dict_model_values[model_name].append(best_miou)
+    print("fully sup:", np.mean(dict_model_values[model_name]))
     plt.hlines(np.mean(dict_model_values[model_name]), xmin=xmin, xmax=xmax, color=c, ls=ls, label=model_name, alpha=alpha)
 
 
@@ -138,19 +140,19 @@ if __name__ == '__main__':
     # plt.plot(figsize=(7, 5))
     rcParams["font.family"] = "serif"
     rcParams["grid.linestyle"] = ':'
+    rcParams["font.size"] = 12
+    xlabel_size = 16
+    rcParams["axes.labelsize"] = 16
+    rcParams["xtick.labelsize"] = 16
+    rcParams["ytick.labelsize"] = 16
 
     DATASET = "voc"
     mode = 2
-
     if mode == 0:
-        title = "CamVid"
+        title = "sota_CamVid"
         unit = 10
         yrange = ()
-        # yrange = (0.35, 0.65)
-
-        # plot_model(f"{DATASET}/deeplab_v3/rand",
-        #            xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
-        #            color="gray", unit=unit, marker='o')
+        yrange = (0.0, 0.70)
 
         plt.figure(figsize=(7, 5))
 
@@ -158,129 +160,135 @@ if __name__ == '__main__':
                    label="PixelPick (Ours, MobileNetv2)",
                    # label="PixelPick (DeepLabv3+)",
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
-                   color="b", unit=unit, ls='--', marker='o', ms=3.5)
+                   color="cyan", unit=unit, ls='--', marker='o', ms=3.5)
 
         plot_model(f"cv/fpn50/ms",
                    label="PixelPick (Ours, ResNet50)",
                    # label="PixelPick (FPN50)",
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
-                   color="darkblue", ls='-', unit=unit, marker='o', ms=3.5)
-
-        # plot_model(f"cv/deeplab_v3/deal",
-        #            list_keywords=[f"_runs_{i:03d}" for i in range(1, 11)],
-        #            label="DEAL (MobileNetv2, reimp.)",
-        #            # label="DEAL (DeepLabv3+)",
-        #            xticks=[i for i in range(1, 11)],
-        #            color="y", unit=unit, marker='o', ms=3.5)
+                   color="blue", ls='-', unit=unit, marker='o', ms=3.5)
 
         # DEAL original
         plt.plot([10, 15, 20, 25, 30, 35, 40], [0.516, 0.557, 0.576, 0.587, 0.6, 0.613, 0.616],
-                 marker='o', ls='--', label="DEAL (Origin.)", color='r', ms=3.5)
+                 marker='o', ls='-', label="DEAL (MobileNetv2)", color='r', ms=3.5)
 
-        draw_hline(f"cv/fpn50/full", "Fully-sup (ResNet50)", xmin=5e-3, xmax=40, alpha=1.0, c='k', ls="-.")
+        # VAAL from DEAL paper
+        plt.plot([10, 15, 20, 25, 30, 35, 40], [0.514, 0.547, 0.569, 0.582, 0.597, 0.607, 0.612],
+                 marker='o', ls='-', label="VAAL (MobileNetv2)", color='darkviolet', ms=3.5)
+
+        # Core-set from DEAL paper
+        plt.plot([10, 15, 20, 25, 30, 35, 40], [0.518, 0.546, 0.566, 0.576, 0.590, 0.598, 0.608],
+                 marker='o', ls='-', label="Core-set (MobileNetv2)", color='y', ms=3.5)
+
+        draw_hline(f"cv/fpn50/full", "Fully-sup (100% annot., ResNet50)", xmin=5e-3, xmax=40, alpha=1.0, c='k', ls="--")
         # 5e-3
         plt.plot([8, 12, 16, 20, 24], [0.567, 0.6182, 0.6274, 0.6341, 0.6385],
                  marker='o', ls='--', label="EquAL (ResNet50)", color='g', ms=3.5)
         plt.plot([8, 12, 16, 20, 24], [0.6213, 0.6446, 0.6492, 0.656, 0.663], marker='o', label="EquAL+ (ResNet50)", color='darkgreen', ms=3.5)
 
         plt.plot([50 / 367 * 100, 100 / 367 * 100], [0.537, 0.557], label="CCT (ResNet50)", marker='o', color="darkred", ms=3.5)
-        # plt.xscale('log')
 
         gca = plt.gca()
         gca.tick_params(direction='in', which='both')
+        # gca.ticklabel_format(axis='x', style='plain')
         plt.legend(loc="lower right", fancybox=False, framealpha=1., edgecolor='black')
         # plt.legend(loc='lower right', fancybox=False, framealpha=1., edgecolor='black')
         # plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fancybox=False, framealpha=1., edgecolor='black')
         # plt.xlim(-2, 25)
-        plt.ylim(0.35, 0.7)
         plt.xscale("log")
-        plt.xlabel("% annotation")
+        plt.xticks([1e-2, 1e-1, 1, 10], ["0.01", "0.1", "1", "10"])
+        plt.xlabel("% annotation (log-scale)")
 
     elif mode == 1:
-        title = "CamVid"
+        title = "deeplab_comp_cv"
         unit = 10
-        yrange = ()
-        # yrange = (0.35, 0.65)
+        yrange = (0.3, 0.59)
+        # figsize=(7, 5)
+        plt.figure(figsize=(33 * 0.2, 19 * 0.2))
+        rcParams["font.size"] = 16
 
-        # plot_model(f"{DATASET}/deeplab_v3/rand",
-        #            xticks=[i for i in range(10, 110, 10)],
-        #            color="gray", unit=unit, marker='o')
-
-        plt.figure(figsize=(7, 5))
+        xticks = [i for i in range(10, 110, 10)]
         ms = 4
-        plot_model(f"{DATASET}/deeplab_v3/ms",
+        fill_between = True
+        plot_model(f"cv/deeplab_v3/rand",
+                   label="RAND",
+                   xticks=xticks,
+                   color="gray", unit=unit, ls='-', marker='s', ms=ms, fill_between=fill_between)
+
+        plot_model(f"cv/deeplab_v3/ms",
                    label="MS",
-                   xticks=[i for i in range(10, 110, 10)],
-                   color="blue", unit=unit, ls='-', marker='o', ms=ms, fill_between=False)
+                   xticks=xticks,
+                   color="blue", unit=unit, ls='-', marker='o', ms=ms, fill_between=fill_between)
 
-        plot_model(f"{DATASET}/deeplab_v3/ent",
+        plot_model(f"cv/deeplab_v3/ent",
                    label="ENT",
-                   xticks=[i for i in range(10, 110, 10)],
-                   color="red", unit=unit, marker='^', ms=ms, fill_between=False)
+                   xticks=xticks,
+                   color="red", unit=unit, marker='^', ms=ms, fill_between=fill_between)
 
-        plot_model(f"{DATASET}/deeplab_v3/lc",
+        plot_model(f"cv/deeplab_v3/lc",
                    label="LC",
-                   xticks=[i for i in range(10, 110, 10)],
-                   color="green", unit=unit, marker='v', ms=ms, fill_between=False)
+                   xticks=xticks,
+                   color="green", unit=unit, marker='v', ms=ms, fill_between=fill_between)
 
-        plot_model(f"{DATASET}/deeplab_v3/ms_soft",
-                   label="QBC (MS)",
-                   xticks=[i for i in range(10, 110, 10)],
-                   color="tab:blue", unit=unit, ls='--', marker='o', ms=ms, fill_between=False)
+        plot_model(f"cv/deeplab_v3/ms_vote",
+                   label="vote MS",
+                   xticks=xticks,
+                   color="tab:blue", unit=unit, ls='--', marker='o', ms=ms, fill_between=fill_between)
 
-        plot_model(f"{DATASET}/deeplab_v3/ent_soft",
-                   label="QBC (ENT)",
-                   xticks=[i for i in range(10, 110, 10)],
-                   color="tab:red", unit=unit, ls='--', marker='^', ms=ms, fill_between=False)
+        plot_model(f"cv/deeplab_v3/ent_vote",
+                   label="vote ENT",
+                   xticks=xticks,
+                   color="tab:red", unit=unit, ls='--', marker='^', ms=ms, fill_between=fill_between)
 
-        plot_model(f"{DATASET}/deeplab_v3/lc_soft",
-                   label="QBC (LC)",
-                   xticks=[i for i in range(10, 110, 10)],
-                   color="tab:green", unit=unit, ls='--', marker='v', ms=ms, fill_between=False)
+        plot_model(f"cv/deeplab_v3/lc_vote",
+                   label="vote LC",
+                   xticks=xticks,
+                   color="tab:green", unit=unit, ls='--', marker='v', ms=ms, fill_between=fill_between)
 
-        plt.xticks([i for i in range(10, 110, 10)], )
+        plt.xticks([i for i in range(10, 110, 10)])
 
         gca = plt.gca()
         gca.tick_params(direction='in', which='both')
         # plt.legend(loc="lower left", fancybox=False, framealpha=1., edgecolor='black')
-        plt.legend(loc='lower right', fancybox=False, framealpha=1., edgecolor='black')
         # plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fancybox=False, framealpha=1., edgecolor='black')
-
-        plt.xlabel("% annotation")
+        draw_hline(f"cv/deeplab_v3/full", model_name="Fully-sup", xmin=5, xmax=105, alpha=1.0, c='k', ls="--")
+        plt.legend(loc='lower right', fancybox=False, framealpha=1., edgecolor='black', fontsize=12)
+        plt.yticks(np.arange(0.3, 0.60, 0.05))  #np.arange(0.42, 0.60, 0.02))
+        plt.xlabel("# labelled pixels per image")
 
     elif mode == 2:
-        title = "cs"
+        title = "sota_cs"
 
         unit = 1
-        yrange = ()
+        yrange = (0, 0.7)
 
-        plt.figure(figsize=(7, 5))
-        # plot_model(f"cs_d4/deeplab_v3/ms",
-        #            label="PixelPick-1 (Ours, MobileNetv2)",
-        #            xticks=[i / (256 * 512) * 100 for i in range(1, 11, 1)],
-        #            color="blue", unit=unit, ls='--', marker='o', ms=3.5)
-        #
-        # plot_model(f"cs_d4/fpn50/ms",
-        #            label="PixelPick-1 (Ours, ResNet50)",
-        #            xticks=[i / (256 * 512) * 100 for i in range(1, 11, 1)],
-        #            color="darkblue", unit=unit, ls='--', marker='o', ms=3.5)
+        plt.figure(figsize=(6, 5.2))
+        draw_hline(f"cs_d4/fpn50/full", "Fully-sup (100% annot., ResNet50)", xmin=5e-3, xmax=40, alpha=1.0, c='k', ls="--")
 
         plot_model(f"cs_d4/deeplab_v3/ms_10",
                    label="PixelPick (Ours, MobileNetv2)",
                    xticks=[i * 10 / (256 * 512) * 100 for i in range(1, 11, 1)],
-                   color="blue", unit=unit, ls='--', marker='o', ms=3.5)
+                   color="cyan", unit=unit, ls='--', marker='o', ms=3.5)
 
         plot_model(f"cs_d4/fpn50/ms_10",
                    label="PixelPick (Ours, ResNet50)",
                    xticks=[i * 10 / (256 * 512) * 100 for i in range(1, 11, 1)],
-                   color="darkblue", ls='-', unit=unit, marker='o', ms=3.5)
+                   color="blue", ls='-', unit=unit, marker='o', ms=3.5)
 
         plt.plot([10, 15, 20, 25, 30, 35, 40], [0.509, 0.552, 0.572, 0.588, 0.6, 0.613, 0.620],
-                 marker='o', ls='--', label="DEAL (Origin.)", color='r', ms=3.5)
+                 marker='o', ls='--', label="DEAL (MobileNetv2)", color='r', ms=3.5)
+
+        # VAAL from DEAL paper
+        plt.plot([10, 15, 20, 25, 30, 35, 40], [0.509, 0.542, 0.559, 0.579, 0.586, 0.602, 0.609],
+                 marker='o', ls='-', label="VAAL (MobileNetv2)", color='darkviolet', ms=3.5)
+
+        # Core-set from DEAL paper
+        plt.plot([10, 15, 20, 25, 30, 35, 40], [0.505, 0.535, 0.555, 0.573, 0.584, 0.593, 0.607],
+                 marker='o', ls='-', label="Core-set (MobileNetv2)", color='y', ms=3.5)
 
         plt.plot([3.356, 6.644, 9.932, 11.575, 13.185, 14.760, 16.370, 17.877, 19.418],
                  [0.492, 0.534, 0.559, 0.583, 0.583, 0.590, 0.592, 0.594, 0.599],
-                 marker='o', ls='--', label="CEREAL (ResNet50)", color='purple', ms=3.5)
+                 marker='o', ls='--', label="CEREAL (ResNet50)", color='gray', ms=3.5)
 
         plt.plot([1, 2, 3, 6, 9, 12, 15], [0.4242, 0.4880, 0.5184, 0.5713, 0.5890, 0.6065, 0.6185],
                  marker='o', ls='--', label="EquAL (ResNet50)", color='green', ms=3.5)
@@ -288,39 +296,57 @@ if __name__ == '__main__':
                  marker='o', label="EquAL+ (ResNet50)", color='green', ms=3.5)
 
         plt.plot([50 / 2975 * 100, 100 / 2975 * 100], [0.35, 0.401], label="CCT (ResNet50)", marker='o', color="red", ms=3.5)
+        gca = plt.gca()
+        gca.tick_params(direction='in', which='both')
 
-        plt.ylim(-0.15, 0.7)
+        plt.ylim(-0.2, 0.7)
         plt.yticks(np.arange(0., 0.7, 0.1))
-        plt.legend(loc='lower left', fancybox=False, framealpha=1., edgecolor='black')
+        plt.legend(loc='lower left', fancybox=False, framealpha=1., edgecolor='black', fontsize=10.8)
         plt.xscale("log")
-        plt.xlabel("% annotation")
+        plt.xlabel("% annotation (log-scale)")
+        plt.xlim()
+        plt.xticks([1e-2, 1e-1, 1, 10], ["0.01", "0.1", "1", "10"])
 
     elif mode == 3:
-        title = "PASCAL VOC 2012"
-        unit = 1
-        yrange = ()
+        title = "sota_PASCAL VOC 2012"
+        unit = 5
+        yrange = (0., 0.73)
+        draw_hline(f"voc/fpn50/full", "Fully-sup (100% annot., ResNet50)", xmin=5e-3, xmax=100, alpha=1.0, c='k', ls="--")
 
-        # plot_model(f"{DATASET}/deeplab_v3/rand", color="tab:blue", unit=unit, marker='o')
-        plot_model(f"{DATASET}/deeplab_v3/ms", color="blue", unit=unit, marker='o', ms=3.5,
+        plot_model(f"voc/deeplab_v3/ms_5",
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(5, 55, 5)],
+                   color="cyan", unit=unit, marker='o', ms=3.5,
                    label="PixelPick (Ours, MobileNetv2)")
-        # plot_model(f"{DATASET}/deeplab_v3/ent", color="tab:red", unit=unit, marker='s')
-        # plot_model(f"{DATASET}/deeplab_v3/lc", color="tab:purple", unit=unit, marker='p')
 
-        plot_model(f"{DATASET}/fpn50/ms", color="darkblue", unit=unit, marker='o', ms=3.5,
+        plot_model(f"voc/fpn50/ms_5",
+                   xticks=[i * 1464 / 169787200 * 100 for i in range(5, 55, 5)],
+                   color="darkblue", unit=unit, marker='o', ms=3.5,
                    label="PixelPick (Ours, ResNet50)")
 
-        plt.plot([(169787200 * 2 / 3) / 1464, 169787200 / 1464], [0.64, 0.694], label="CCT (ResNet50)", marker='s',
-                 color="red", ms=3.5)
-        plt.scatter(169787200 / 1464, 0.732, label="CCT+ (ResNet50)", marker='s', color="darkred", s=12)
+        plt.scatter(786982 / 262462800 * 100, 0.631, label=r"ScribbleSup (VGG16)",  # $^\dag$
+                    marker='^', color="darkred", s=24)
 
-        plot_model(f"{DATASET}/scribble/",
-                   xticks=[786982 / 1464],
-                   color="purple",
-                   unit=unit,
-                   scatter=True,
-                   marker='^', ms=20, label="Scribble (ResNet50)")
+        # voc total pixels used in CCT: 169787200
+        plt.plot([(2 / 3) * 100, 100], [0.64, 0.694], label=r"CCT (ResNet50)", marker='s', color="red", ms=3.5)  # $^\ddag$
+        # plt.scatter(100, 0.732, label=r"CCT+ (ResNet50)$^\ddag$", marker='s', color="darkred", s=24)
+        plt.scatter(100, 0.646, label=r"WSSL (VGG16)", marker='*', s=24)  # $^\ddag$
+        plt.scatter(100, 0.605, label=r"GAIN (VGG16)", marker='p',  s=24)  # $^\ddag$
+        plt.scatter(100, 0.657, label=r"MDC (VGG16)", marker='+',  s=24)  # $^\ddag$
+        plt.scatter(100, 0.643, label=r"DSRG (VGG16)", marker='v',  s=24)  # $^\ddag$
+        plt.scatter(100, 0.658, label=r"FickleNet (VGG16)", marker='h', s=24)  # $^\ddag$
+
+        plt.legend(fancybox=False, framealpha=1.0, edgecolor='k', fontsize=11)
+        # plot_model(f"{DATASET}/ScribbleSup/",
+        #            xticks=[786982 / 1464],
+        #            color="purple",
+        #            unit=unit,
+        #            scatter=True,
+        #            marker='^', ms=20, label="Scribble (ResNet50)")
+        gca = plt.gca()
+        gca.tick_params(direction='in', which='both')
         plt.xscale("log")
-        plt.xlabel("# pixels per img")
+        plt.xlabel("% annotation (log-scale)")
+        plt.xticks([1e-2, 1e-1, 1, 10, 100], ["0.01", "0.1", "1", "10", "100"])
 
     elif mode == 4:
         title = "deeplab_comp"
@@ -331,47 +357,47 @@ if __name__ == '__main__':
 
         plot_model(f"{DATASET}/deeplab_v3/rand",
                    label="RAND",
-                   fill_between=False,
+                   fill_between=True,
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
                    color="gray", unit=unit, marker='o')
 
         plot_model(f"{DATASET}/deeplab_v3/ms",
                    label="MS",
-                   fill_between=False,
+                   fill_between=True,
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
                    color="b", unit=unit, ls='-', marker='o', ms=3.5)
 
         plot_model(f"{DATASET}/deeplab_v3/ent",
                    label="ENT",
-                   fill_between=False,
+                   fill_between=True,
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
                    color="r", unit=unit, ls='-', marker='o', ms=3.5)
 
         plot_model(f"{DATASET}/deeplab_v3/lc",
                    label="LC",
-                   fill_between=False,
+                   fill_between=True,
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
                    color="g", unit=unit, ls='-', marker='o', ms=3.5)
 
         plot_model(f"{DATASET}/deeplab_v3/ms_vote",
                    label="vote MS",
-                   fill_between=False,
+                   fill_between=True,
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
                    color="b", unit=unit, ls='--', marker='o', ms=3.5)
 
         plot_model(f"{DATASET}/deeplab_v3/ent_vote",
                    label="vote ENT",
-                   fill_between=False,
+                   fill_between=True,
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
                    color="r", unit=unit, ls='--', marker='o', ms=3.5)
 
         plot_model(f"{DATASET}/deeplab_v3/lc_vote",
                    label="vote LC",
-                   fill_between=False,
+                   fill_between=True,
                    xticks=[i / (360 * 480) * 100 for i in range(10, 110, 10)],
                    color="g", unit=unit, ls='--', marker='o', ms=3.5)
 
-        draw_hline(f"{DATASET}/deeplab_v3/full", "Fully-sup", xmin=5e-3, xmax=0.06, alpha=1.0, c='k', ls="-.")
+        draw_hline(f"{DATASET}/deeplab_v3/full", "Fully-sup", xmin=5e-3, xmax=0.06, alpha=1.0, c='k', ls="--")
 
         gca = plt.gca()
         gca.tick_params(direction='in', which='both')
@@ -410,7 +436,7 @@ if __name__ == '__main__':
                    xticks=[i * 1464 / 169787200 * 100 for i in range(1, 11, 1)],
                    color="g", unit=unit, ls='-', marker='o', ms=3.5)
 
-        # draw_hline(f"{DATASET}/deeplab_v3/full", "Fully-sup", xmin=5e-3, xmax=0.06, alpha=1.0, c='k', ls="-.")
+        draw_hline(f"voc/deeplab_v3/full", "Fully-sup", xmin=5e-4, xmax=0.01, alpha=1.0, c='k', ls="--")
 
         gca = plt.gca()
         gca.tick_params(direction='in', which='both')
@@ -462,7 +488,7 @@ if __name__ == '__main__':
     plt.grid()
     plt.ylim(*yrange)
 
-    plt.tight_layout()
-    plt.savefig(f"sota_{title}.png")
+    plt.tight_layout(pad=0.1)
+    plt.savefig(f"{title}.pdf")
     plt.show()
 

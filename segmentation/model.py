@@ -30,8 +30,8 @@ class Model:
         self.n_classes = args.n_classes
         self.n_epochs = args.n_epochs
         self.n_epochs_query = args.n_epochs_query
-        self.n_pixels_per_img = args.n_pixels_by_us + args.n_pixels_by_oracle_cb  # args.n_pixels_per_img
-        self.n_pixels_per_query = (args.n_pixels_by_us + args.n_pixels_by_oracle_cb)
+        self.n_pixels_per_img = args.n_pixels_by_us
+        self.n_pixels_per_query = args.n_pixels_by_us
         self.nth_query = -1
         self.stride_total = args.stride_total
         self.use_softmax = args.use_softmax
@@ -67,6 +67,7 @@ class Model:
         self.network_name = args.network_name
         self.n_emb_dims = args.n_emb_dims
         self.n_prototypes = args.n_prototypes
+        self.init_n_pixels = args.n_init_pixels
 
         self.use_scribbles = args.use_scribbles
         self.use_visual_acuity = args.use_visual_acuity
@@ -146,7 +147,10 @@ class Model:
                         break
 
             else:
-                for nth_query in range(self.max_budget // self.n_pixels_per_query):
+                n_stages = self.max_budget // self.n_pixels_per_query
+                n_stages += 1 if self.init_n_pixels > 0 else n_stages
+
+                for nth_query in range(n_stages):
                     dir_checkpoints = f"{self.dir_checkpoints}/{nth_query}_query"
                     self.log_train = f"{dir_checkpoints}/log_train.txt"
                     self.log_val = f"{dir_checkpoints}/log_val.txt"
@@ -171,7 +175,7 @@ class Model:
 
                     # zip_file = zip_dir(f"{dir_checkpoints}", remove_dir=True)
                     # send_file(zip_file, file_name=f"{self.experim_name}_{nth_query}_query", remove_file=True)
-                    if nth_query == (self.max_budget // self.n_pixels_per_query) - 1 or self.n_pixels_per_img == 0:
+                    if nth_query == n_stages - 1:
                         break
 
                     elif nth_query == 0:

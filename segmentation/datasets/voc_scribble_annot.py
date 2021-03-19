@@ -70,6 +70,8 @@ if __name__ == '__main__':
     else:
         data = get_scribble_summary()
 
+    total_pixels = 0
+    n_pixels_annot = 0
     import numpy as np
     for datum in tqdm(data):
         fname, h, w, points = datum["filename"], datum["h"], datum["w"], datum["points"]
@@ -79,4 +81,9 @@ if __name__ == '__main__':
                 grid[p] = True
             except IndexError:
                 raise IndexError(fname, h, w, p)
-        np.save(f"{DST}/{fname.split('.')[0]}.npy", grid)
+
+        total_pixels += h * w
+        n_pixels_annot += grid.sum()
+        # np.save(f"{DST}/{fname.split('.')[0]}.npy", grid)
+
+    print("# total pixels:", total_pixels, "# pixels annotated by scribbles:", n_pixels_annot)

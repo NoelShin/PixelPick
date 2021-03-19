@@ -28,6 +28,7 @@ class VOC2012Segmentation:
         self.use_scribbles = args.use_scribbles
 
         n_pixels_per_img = args.n_pixels_by_us
+        init_n_pixels = args.n_init_pixels if args.n_init_pixels > 0 else n_pixels_per_img
 
         if args.use_augmented_dataset and not val:
             self.voc = AugmentedVOC(args.dir_augmented_dataset)
@@ -83,8 +84,13 @@ class VOC2012Segmentation:
                     for i in tqdm(range(len(self.voc))):
                         label = self.voc[i][1]
                         w, h = label.size
-                        n_pixels_per_img = h * w if n_pixels_per_img == 0 else n_pixels_per_img
-
+                        # n_pixels_per_img = h * w if n_pixels_per_img == 0 else n_pixels_per_img
+                        if n_pixels_per_img == 0:
+                            n_pixels_per_img = h * w
+                        elif n_pixels_per_img != 0 and init_n_pixels > 0:
+                            n_pixels_per_img = init_n_pixels
+                        else:
+                            raise NotImplementedError
                         # generate masks whose size is set to base_size (longer side), i.e. 400 as default
                         h, w = self._compute_base_size(h, w)
 

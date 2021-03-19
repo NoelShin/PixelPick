@@ -23,6 +23,9 @@ class Arguments:
         parser.add_argument("--n_pixels_by_us", type=int, default=10, help="# pixels selected by a uncertainty sampling")
         parser.add_argument("--n_epochs_query", type=int, default=20, help="interval between queries in epoch")
 
+        # for supp. mat.
+        parser.add_argument("--n_init_pixels", type=int, default=1, help="# pixels selected by a uncertainty sampling")
+
         parser.add_argument("--max_budget", type=int, default=100, help="maximum budget in pixels per image")
         parser.add_argument("--query_strategy", type=str, default="least_confidence", choices=["least_confidence", "margin_sampling", "entropy", "random"])
         parser.add_argument("--use_cb_sampling", action="store_true", default=False, help="class balance sampling")

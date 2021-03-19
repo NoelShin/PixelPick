@@ -9,7 +9,7 @@ def change_name(prev, new):
 
 
 if __name__ == '__main__':
-    DIR_ROOT = "FPN18"
+    DIR_ROOT = "FPN101"
     list_files = sorted(glob(f"{DIR_ROOT}/**/*", recursive=True))
 
     for fname in list_files:
