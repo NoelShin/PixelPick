@@ -38,17 +38,49 @@ class QuerySelector:
 
         self.top_n_percent = args.top_n_percent
 
+        self.reverse_order = args.reverse_order
+
         self.query_stats = QueryStats(args)
 
     def _select_queries(self, uc_map):
         h, w = uc_map.shape[-2:]
         uc_map = uc_map.flatten()
         k = int(h * w * self.top_n_percent) if self.top_n_percent > 0. else self.n_pixels_by_us
-        ind_queries = uc_map.topk(k=k,
-                                  dim=0,
-                                  largest=self.query_strategy in ["entropy", "least_confidence"]).indices.cpu().numpy()
-        if self.top_n_percent > 0.:
-            ind_queries = np.random.choice(ind_queries, self.n_pixels_by_us, False)
+
+        if self.reverse_order:
+            assert self.top_n_percent > 0.
+            ind_queries = np.random.choice(range(h * w), k, False)
+            sampling_mask = np.zeros((h * w), dtype=np.bool)
+            sampling_mask[ind_queries] = True
+            sampling_mask = torch.tensor(sampling_mask, dtype=torch.bool, device=self.device)
+
+            if self.query_strategy in ["entropy", "least_confidence"]:
+                uc_map[~sampling_mask] = 0.
+            else:
+                uc_map[~sampling_mask] = 1.0
+
+            # print(uc_map.sum(), uc_map.dtype)
+            # uc_map = uc_map.view(h, w).cpu().numpy()
+            # uc_map -= uc_map.min()
+            # uc_map = uc_map / uc_map.max()
+            # uc_map *= 255
+            # uc_map = np.clip(uc_map, 0., 255.).astype(np.uint8)
+            #
+            # from PIL import Image
+            # Image.fromarray(uc_map).show()
+            # exit(12)
+
+            ind_queries = uc_map.topk(k=self.n_pixels_by_us,
+                                      dim=0,
+                                      largest=self.query_strategy in ["entropy",
+                                                                      "least_confidence"]).indices.cpu().numpy()
+
+        else:
+            ind_queries = uc_map.topk(k=k,
+                                      dim=0,
+                                      largest=self.query_strategy in ["entropy", "least_confidence"]).indices.cpu().numpy()
+            if self.top_n_percent > 0.:
+                ind_queries = np.random.choice(ind_queries, self.n_pixels_by_us, False)
 
         query = np.zeros((h * w), dtype=np.bool)
         query[ind_queries] = True

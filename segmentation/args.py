@@ -111,6 +111,8 @@ class Arguments:
 
         parser.add_argument("--simulate_error", action="store_true", default=False)
 
+        parser.add_argument("--reverse_order", action="store_true", default=False)
+
         self.parser = parser
 
     def parse_args(self):
@@ -247,6 +249,8 @@ class Arguments:
         list_keywords.append("oracle_cb_{}".format(args.n_pixels_by_oracle_cb)) if args.n_pixels_by_oracle_cb > 0 else None
 
         list_keywords.append("pseudo") if args.use_pseudo_label else None
+
+        list_keywords.append("reverse") if args.reverse_order else None
 
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None

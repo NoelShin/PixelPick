@@ -149,7 +149,7 @@ class Model:
             else:
                 n_stages = self.max_budget // self.n_pixels_per_query
                 n_stages += 1 if self.init_n_pixels > 0 else n_stages
-
+                print("n_stages: ", n_stages)
                 for nth_query in range(n_stages):
                     dir_checkpoints = f"{self.dir_checkpoints}/{nth_query}_query"
                     self.log_train = f"{dir_checkpoints}/log_train.txt"
@@ -206,6 +206,9 @@ class Model:
         dataloader_iter = iter(self.dataloader)
         tbar = tqdm(range(len(self.dataloader)))
 
+        # INIT LOGGERS
+        starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        timings = list()
         for batch_ind in tbar:
             dict_data = next(dataloader_iter)
             x, y = dict_data['x'].to(self.device), dict_data['y'].to(self.device)
@@ -227,7 +230,9 @@ class Model:
                     y_pseudo = dict_data["y_pseudo"].to(self.device)
 
             # forward pass
+            starter.record()
             dict_outputs = model(x)
+
 
             logits = dict_outputs["pred"]
             dict_losses = {"ce": F.cross_entropy(logits, y, ignore_index=self.ignore_index)}
@@ -286,6 +291,13 @@ class Model:
             loss.backward()
             optimizer.step()
 
+            #ender.record()
+
+            # WAIT FOR GPU SYNC
+            # torch.cuda.synchronize()
+            # curr_time = starter.elapsed_time(ender)
+            # timings.append(curr_time)
+
             self.running_loss.update(loss.detach().item())
             scores = self.running_score.get_scores()[0]
 
@@ -300,6 +312,9 @@ class Model:
 
             if self.debug:
                 break
+
+        # mean_syn = np.mean(timings)
+        # std_syn = np.std(timings)
 
         if self.lr_scheduler_type == "MultiStepLR":
             lr_scheduler.step(epoch=epoch - 1)
