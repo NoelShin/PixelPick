@@ -1,11 +1,8 @@
-figures/
 *.txt
 *.pyc
 *.png
 *.npy
 *.pt
-segmentation/logs
-segmentation/scripts
-segmentation/networks/backbones/pretrained/*
-analysis
+*.pth
+networks/backbones/pretrained/*
 checkpoints
