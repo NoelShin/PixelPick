@@ -82,6 +82,17 @@
 		height: 1px;
 		background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
 	}
+
+	.row_imgs {
+	  text-align:center;
+	}
+
+	.row_imgs img {
+		display:inline-block;
+    margin:5px 20px;
+    padding:5px;
+	}
+
 </style>
 
 <html>
@@ -216,6 +227,38 @@
 				</div>
 			</td>
 		</tr>
+	</table>
+	<br>
+
+	<hr>
+
+	<!--Overview image of PixelPick-->
+	<table align=center width=850px>
+		<center><h1>Results on CamVid and Cityscapes benchmarks</h1></center>
+		<tr>
+			<td>
+				<div class="row_imgs" align=center>
+					<img src="resources/sota_cv.png" width=40%>
+					<img src="resources/sota_cs.png" width=40%>
+					<div class="clear"></div>
+				</div>
+			</td>
+		</tr>
+
+		<tr>
+			<td>
+				<br>
+			</td>
+		</tr>
+
+		<tr>
+			<td>
+				<div style="text-align: justify">
+					We show that deep neural networks can obtain remarkable performance with just a handful of labelled pixels per image whose spatial coordinates are proposed by the model, rather than the human annotator. We compare our approach, PixelPick, with existing active learning and semi-supervised approaches on the CamVid (left) and Cityscapes (right).
+				</div>
+			</td>
+		</tr>
+
 	</table>
 	<br>
 
