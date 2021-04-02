@@ -1,53 +1,53 @@
-<script src="http://www.google.com/jsapi" type="text/javascript"></script> 
+<script src="http://www.google.com/jsapi" type="text/javascript"></script>
 <script type="text/javascript">google.load("jquery", "1.3.2");</script>
 
 <style type="text/css">
 	body {
-		font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif; 
+		font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
 		font-weight:300;
 		font-size:18px;
 		margin-left: auto;
 		margin-right: auto;
 		width: 1100px;
 	}
-	
+
 	h1 {
 		font-size:32px;
 		font-weight:300;
 	}
-	
-	.disclaimerbox {
-		background-color: #eee;		
+
+	/* .disclaimerbox {
+		background-color: #eee;
 		border: 1px solid #eeeeee;
 		border-radius: 10px ;
 		-moz-border-radius: 10px ;
 		-webkit-border-radius: 10px ;
 		padding: 20px;
+	} */
+
+	/* video.header-vid {
+		height: 140px;
+		border: 1px solid black;
+		border-radius: 10px ;
+		-moz-border-radius: 10px ;
+		-webkit-border-radius: 10px ;
+	} */
+
+	/* img.header-img {
+		height: 140px;
+		border: 1px solid black;
+		border-radius: 10px ;
+		-moz-border-radius: 10px ;
+		-webkit-border-radius: 10px ;
 	}
 
-	video.header-vid {
-		height: 140px;
-		border: 1px solid black;
-		border-radius: 10px ;
-		-moz-border-radius: 10px ;
-		-webkit-border-radius: 10px ;
-	}
-	
-	img.header-img {
-		height: 140px;
-		border: 1px solid black;
-		border-radius: 10px ;
-		-moz-border-radius: 10px ;
-		-webkit-border-radius: 10px ;
-	}
-	
 	img.rounded {
 		border: 1px solid #eeeeee;
 		border-radius: 10px ;
 		-moz-border-radius: 10px ;
 		-webkit-border-radius: 10px ;
-	}
-	
+	} */
+
 	a:link,a:visited
 	{
 		color: #1367a7;
@@ -56,13 +56,13 @@
 	a:hover {
 		color: #208799;
 	}
-	
+
 	td.dl-link {
 		height: 160px;
 		text-align: center;
 		font-size: 22px;
 	}
-	
+
 	.layered-paper-big { /* modified from: http://css-tricks.com/snippets/css/layered-paper/ */
 		box-shadow:
 		0px 0px 1px 1px rgba(0,0,0,0.35), /* The top layer shadow */
@@ -101,13 +101,13 @@
 		margin-right: 30px;
 		margin-bottom: 5px;
 	}
-	
+
 	.vert-cent {
 		position: relative;
 		top: 50%;
 		transform: translateY(-50%);
 	}
-	
+
 	hr
 	{
 		border: 0;
@@ -118,14 +118,14 @@
 
 <html>
 <head>
-	<title>This is my paper title</title>
+	<title>All you need are a few pixels: semantic segmentation with PixelPick</title>
 	<meta property="og:image" content="Path to my teaser.png"/> <!-- Facebook automatically scrapes this. Go to https://developers.facebook.com/tools/debug/ if you update and want to force Facebook to rescrape. -->
-	<meta property="og:title" content="Creative and Descriptive Paper Title." />
+	<meta property="og:title" content="All you need are a few pixels: semantic segmentation with PixelPick" />
 	<meta property="og:description" content="Paper description." />
 
 	<!-- Get from Google Analytics -->
 	<!-- Global site tag (gtag.js) - Google Analytics -->
-	<script async src=""></script> 
+	<script async src=""></script>
 	<script>
 		window.dataLayer = window.dataLayer || [];
 		function gtag(){dataLayer.push(arguments);}
@@ -133,42 +133,54 @@
 
 		gtag('config', 'UA-75863369-6');
 	</script>
+
+	<!--Enable LaTeX within html5-->
+
+	<script type="text/javascript" async
+		src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+	</script>
+
+	<script type="text/x-mathjax-config">
+		MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+	</script>
+
 </head>
 
 <body>
 	<br>
 	<center>
-		<span style="font-size:36px">Creative and Descriptive Paper Title</span>
+		<span style="font-size:32px">All you need are a few pixels: semantic segmentation with PixelPick</span>
 		<table align=center width=600px>
-			<table align=center width=600px>
+				<tr>
+					<td><br></td>
+				</tr>
 				<tr>
 					<td align=center width=100px>
 						<center>
-							<span style="font-size:24px"><a href="https://en.wikipedia.org/wiki/James_J._Gibson">First Author</a></span>
+							<span style="font-size:18pt"><a href="#">Gyungin Shin</a></span>
 						</center>
 					</td>
 					<td align=center width=100px>
 						<center>
-							<span style="font-size:24px"><a href="https://en.wikipedia.org/wiki/James_J._Gibson">Second Author</a></span>
+							<span style="font-size:18pt"><a href="https://weidixie.github.io/weidi-personal-webpage/">Weidi Xie</a></span>
 						</center>
 					</td>
 					<td align=center width=100px>
 						<center>
-							<span style="font-size:24px"><a href="https://en.wikipedia.org/wiki/James_J._Gibson">Third Author</a></span>
+							<span style="font-size:18pt"><a href="https://www.robots.ox.ac.uk/~albanie/">Samuel Albanie</a></span>
 						</center>
 					</td>
 				</tr>
-			</table>
 			<table align=center width=250px>
 				<tr>
 					<td align=center width=120px>
 						<center>
-							<span style="font-size:24px"><a href=''>[Paper]</a></span>
+							<span style="font-size:18pt"><a href='#'>[Paper]</a></span>
 						</center>
 					</td>
 					<td align=center width=120px>
 						<center>
-							<span style="font-size:24px"><a href='https://github.com/richzhang/webpage-template'>[GitHub]</a></span><br>
+							<span style="font-size:18pt"><a href='https://github.com/NoelShin/PixelPick'>[GitHub]</a></span><br>
 						</center>
 					</td>
 				</tr>
@@ -176,101 +188,114 @@
 		</table>
 	</center>
 
-	<center>
-		<table align=center width=850px>
-			<tr>
-				<td width=260px>
-					<center>
-						<img class="round" style="width:500px" src="./resources/teaser.png"/>
-					</center>
-				</td>
-			</tr>
-		</table>
-		<table align=center width=850px>
-			<tr>
-				<td>
-					This was a template originally made for <a href="http://richzhang.github.io/colorization/">Colorful Image Colorization</a>. The code can be found in this <a href="https://github.com/richzhang/webpage-template">repository</a>.
-				</td>
-			</tr>
-		</table>
-	</center>
+	<!--Teaser image-->
+	<table align=center width=600px>
+		<tr>
+			<td>
+  			<img style="width: 850px" src="./resources/demo_voc_cs.png"/>
+			</td>
+		</tr>
+
+		<tr>
+			<td>
+				<br/>
+			</td>
+		</tr>
+		<!-- description for the teaser -->
+		<tr>
+			<td>
+					<div style="text-align: justify; width: 850px">With only 10 labelled pixels per image, segmentation models trained with PixelPick achieve promising visual quality, which further improves to capture fine details (e.g. the cleanly segmented thin lamppost in the bottom right image) as further labelled pixels are used.</div>
+			</td>
+		<tr>
+		</tr>
+	</table>
 
 	<hr>
-
+	<!--Abstract-->
 	<table align=center width=850px>
 		<center><h1>Abstract</h1></center>
 		<tr>
 			<td>
-				This is my abstract.
+				<div style="text-align: justify">
+					A central challenge for the task of semantic segmentation is the prohibitive cost of obtaining dense pixel-level anno-tations to supervise model training.  In this work, we show that in order to achieve a good level of segmentation performance, all you need are a few well-chosen pixel labels. We make the following contributions:  (i) We investigate the novel semantic segmentation setting in which labels are supplied only at sparse pixel locations, and show that deep neural networks can use a handful of such labels to good effect; (ii) We demonstrate how to exploit this phenomena within an active learning framework, termed PixelPick, to radically reduce labelling cost, and propose an efficient “mouse-free” annotation strategy to implement our approach; (iii) We conduct extensive experiments to study the influence of annotation diversity under a fixed budget, model pretraining, model capacity and the sampling mechanism for picking pixels in this low annotation regime; (iv) We provide comparisons to the existing state of the art in semantic segmentation with active learning, and demonstrate comparable performance with up to two orders of magnitude fewer annotations on the CamVid, Cityscapes and PASCAL VOC 2012 benchmarks; (v) Finally, we evaluate the efficiency of our annotation pipeline and its sensitivity to annotator error to demonstrate its practicality. Our code, models and annotation tool will be made publicly available.
+				</div>
 			</td>
 		</tr>
 	</table>
 	<br>
 
 	<hr>
-	<center><h1>Talk</h1></center>
-	<p align="center">
-		<iframe width="660" height="395" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen align="center"></iframe>
-	</p>
 
-	<table align=center width=800px>
-		<br>
+	<!--Overview image of PixelPick-->
+	<table align=center width=850px>
+		<center><h1>How does it work?</h1></center>
 		<tr>
-			<center>
-				<span style="font-size:28px"><a href=''>[Slides]</a>
-				</span>
-			</center>
+			<td>
+					<img class="round" style="width:850px" src="./resources/overview.png"/>
+			</td>
+		</tr>
+
+		<tr>
+			<td>
+				<br>
+			</td>
+		</tr>
+
+		<tr>
+			<td>
+				<div style="text-align: justify">
+					Given a database of unlabelled pixels of interest (top-left) each image is fed to a segmentation model to produce pixel-wise class probabilities (top-middle), which are in turn passed to an acquisition function to estimate per-pixel uncertainties and select a batch of \(B\) pixels to be labelled (top-right). The queries are sent to annotators (bottom-right), and the resulting labels are added to the labelled pixel database, \(D_L\) (bottom-middle). Finally, the segmentation model is retrained on the expanded database (bottom-left), before the cycle repeats. To bootstrap the process and train the initial segmentation model, we randomly sample \(B\) pixels and send them to be annotated.
+				</div>
+			</td>
 		</tr>
 	</table>
+	<br>
+
 	<hr>
 
-	<center><h1>Code</h1></center>
-
-	<table align=center width=420px>
-		<center>
-			<tr>
-				<td>
-				</td>
-			</tr>
-		</center>
-	</table>
-	<table align=center width=400px>
+	<!--A short video showing how PixelPick gui works-->
+	<table align=center width=850px>
+		<center><h1>PixelPick mouse-free annotation tool</h1></center>
 		<tr>
-			<td align=center width=400px>
+			<td>
 				<center>
-					<td><img class="round" style="width:450px" src="./resources/method_diagram.png"/></td>
+				<video width="500px" src="resources/pixelpick_annot_tool.mov" loop="true" autoplay muted></video>
 				</center>
 			</td>
 		</tr>
+
+		<tr>
+			<td>
+				</br>
+			</td>
+		</tr>
+
+		<tr>
+			<td>
+				<div style="text-align: justify">Annotators are asked to classify the highlighted point (in red) by pressing the keyboard character of the corresponding class for the dataset. The tool then highlights the next pixel proposal and the process repeats.</div>
+			</td>
+		</tr>
+
+		<tr>
+			<td>
+				<div style="font-size:18pt" align=center>
+					<a href='#'>[Code]</a>
+				</div>
+			</td>
+		</tr>
 	</table>
-	<table align=center width=850px>
-		<center>
-			<tr>
-				<td>
-					Short description if wanted
-				</td>
-			</tr>
-		</center>
-	</table>
-	<table align=center width=800px>
-		<br>
-		<tr><center>
-			<span style="font-size:28px">&nbsp;<a href='https://github.com/richzhang/webpage-template'>[GitHub]</a>
-			</center>
-		</span>
-	</table>
-	<br>
+
 	<hr>
+
 	<table align=center width=450px>
 		<center><h1>Paper and Supplementary Material</h1></center>
 		<tr>
 			<td><a href=""><img class="layered-paper-big" style="height:175px" src="./resources/paper.png"/></a></td>
 			<td><span style="font-size:14pt">F. Author, S. Author, T. Author.<br>
-				<b>Creative and Descriptive Paper Title.</b><br>
-				In Conference, 20XX.<br>
-				(hosted on <a href="">ArXiv</a>)<br>
+				<b>All you need are a few pixels: semantic segmentation with PixelPick</b>
+				<!--(hosted on <a href="">ArXiv</a>)<br>-->
 				<!-- (<a href="./resources/camera-ready.pdf">camera ready</a>)<br> -->
-				<span style="font-size:4pt"><a href=""><br></a>
+				<span style="font-size:4pt"><a href="#"><br></a>
 				</span>
 			</td>
 		</tr>
@@ -279,8 +304,8 @@
 
 	<table align=center width=600px>
 		<tr>
-			<td><span style="font-size:14pt"><center>
-				<a href="./resources/bibtex.txt">[Bibtex]</a>
+			<td><span style="font-size:18pt"><center>
+				<a href="#">[Bibtex]</a>
 			</center></td>
 		</tr>
 	</table>
@@ -293,7 +318,7 @@
 			<td width=400px>
 				<left>
 					<center><h1>Acknowledgements</h1></center>
-					This template was originally made by <a href="http://web.mit.edu/phillipi/">Phillip Isola</a> and <a href="http://richzhang.github.io/">Richard Zhang</a> for a <a href="http://richzhang.github.io/colorization/">colorful</a> ECCV project; the code can be found <a href="https://github.com/richzhang/webpage-template">here</a>.
+					The design of this project page was borrowed and modified from the template made by <a href="http://web.mit.edu/phillipi/">Phillip Isola</a> and <a href="http://richzhang.github.io/">Richard Zhang</a>.
 				</left>
 			</td>
 		</tr>
@@ -302,4 +327,3 @@
 <br>
 </body>
 </html>
-
