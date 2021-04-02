@@ -1,6 +1,10 @@
 # PixelPick
 This is an official implementation of the paper "All you need are a few pixels: semantic segmentation with PixelPick."
 
+<p align="center">
+  <img src="resources/demo_voc_cs.png"></img>
+</p>
+
 [[Project page]](https://noelshin.github.io/PixelPick/ "project_page")
 
 ### Table of contents
@@ -17,7 +21,7 @@ A central challenge for the task of semantic segmentation is the prohibitive cos
 
 ### Installation
 ##### Prerequisites
-Our code is based on `Python 3.8` and uses following Python packages.
+Our code is based on `Python 3.8` and uses the following Python packages.
 ```
 cv2, torch, torchvision, tqdm
 ```
