@@ -11,7 +11,7 @@ This is an official implementation of the paper "All you need are a few pixels: 
 * [Abstract](#abstract)
 * [Installation](#installation)
 * [Benchmark results](#benchmark-results)
-* [Models](#models) (to be updated)
+* [Models](#models)
 * [PixelPick mouse-free annotation tool](#pixelpick-mouse-free-annotation-tool) (to be updated)
 * [Citation](#citation) (to be updated)
 * [Acknowledgements](#acknowledgements)
@@ -102,9 +102,13 @@ Fully-supervised|ResNet50|N/A (100)|69.4 ± 0.3
 ### Models
 model|dataset|backbone (encoder)|# labelled pixels per img (% annotation)|mean IoU (%)|Download
 :---|:---|:---:|:---:|:---:|:---:
-PixelPick|VOC 2012|MobileNetv2|50 (0.043)|57.4|[Link]("https://drive.google.com/file/d/1kV0Me2IdDzEUAT1nZkNAJqCZK_wI9DdA/view?usp=sharing" "link")
-PixelPick|ResNet50|50 (0.043)|50 (0.043)|68.0
-Fully-supervised|ResNet50|N/A (100)|69.4 ± 0.3
+PixelPick|CamVid|MobileNetv2|100 (0.058)|56.1|[Link](https://drive.google.com/file/d/1HGd9dUz7Xf_OUOw26f8J-t6kWTdDZOic/view?usp=sharing "link")
+PixelPick|CamVid|ResNet50|100 (0.058)|TBU|TBU
+PixelPick|Cityscapes|MobileNetv2|100 (0.076)|56.8|[Link](https://drive.google.com/file/d/1tLcNSpw5xVMKy_xmXTmL9xwGPJ4-nXKx/view?usp=sharing "link")
+PixelPick|Cityscapes|ResNet50|100 (0.076)|63.3|[Link](https://drive.google.com/file/d/1OZGeIpNpFPbeFj9sO9Cq5zZbgVs_gbCc/view?usp=sharing "link")
+PixelPick|VOC 2012|MobileNetv2|50 (0.043)|57.4|[Link](https://drive.google.com/file/d/1afuqPYryd5kzfsUcf0xSFhGHjphMQ-Rv/view?usp=sharing "link")
+PixelPick|VOC 2012|ResNet50|50 (0.043)|68.0|[Link](https://drive.google.com/file/d/1fKWMz89-hwB_EApcacxfPApNHvvXf9MB/view?usp=sharing "link")
+
 
 
 ### PixelPick mouse-free annotation tool
