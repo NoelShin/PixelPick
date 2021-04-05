@@ -48,7 +48,7 @@ cd scripts
 sh pixelpick-dl-cv.sh
 ```
 ### Benchmark results
-
+For CamVid and Cityscapes, we report the average of 5 different runs and 3 different runs for PASCAL VOC 2012. Please refer to our paper for details. ± one std of mean IoU is denoted.
 ##### CamVid
 model|backbone (encoder)| # labelled pixels per img (% annotation) | mean IoU (%)
 :---|:---|:---:|:---:
