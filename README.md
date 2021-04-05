@@ -17,13 +17,16 @@ This is an official implementation of the paper "All you need are a few pixels: 
 * [Acknowledgements](#acknowledgements)
 
 ### Abstract
-A central challenge for the task of semantic segmentation is the prohibitive cost of obtaining dense pixel-level annotations to supervise model training. In this work, we show that in order to achieve a good level of segmentation performance, all you need are a few well-chosen pixel labels. We make the following contributions: (i) We investigate the novel semantic segmentation setting in which labels are supplied only at sparse pixel locations, and show that deep neural networks can use a handful of such labels to good effect; (ii) We demonstrate how to exploit this phenomena within an active learning framework, termed PixelPick, to radically reduce labelling cost, and propose an efficient “mouse-free” annotation strategy to implement our approach; (iii) We conduct extensive experiments to study the influence of annotation diversity under a fixed budget, model pretraining, model capacity and the sampling mechanism for picking pixels in this low annotation regime; (iv) We provide comparisons to the existing state of the art in semantic segmentation with active learning, and demonstrate comparable performance with up to two orders of magnitude fewer annotations on the CamVid, Cityscapes and PASCAL VOC 2012 benchmarks; (v) Finally, we evaluate the efficiency of our annotation pipeline and its sensitivity to annotator error to demonstrate its practicality. Our code, models and annotation tool will be made publicly available.
+A central challenge for the task of semantic segmentation is the prohibitive cost of obtaining dense pixel-level annotations to supervise model training. In this work, we show that in order to achieve a good level of segmentation performance, all you need are a few well-chosen pixel labels. We make the following contributions: (i) We investigate the novel semantic segmentation setting in which labels are supplied only at sparse pixel locations, and show that deep neural networks can use a handful of such labels to good effect; (ii) We demonstrate how to exploit this phenomena within an active learning framework, termed PixelPick, to radically reduce labelling cost, and propose an efficient “mouse-free” annotation strategy to implement our approach; (iii) We conduct extensive experiments to study the influence of annotation diversity under a fixed budget, model pretraining, model capacity and the sampling mechanism for picking pixels in this low annotation regime; (iv) We provide comparisons to the existing state of the art in semantic segmentation with active learning, and demonstrate comparable performance with up to two orders of magnitude fewer pixel annotations on the CamVid, Cityscapes and PASCAL VOC 2012 benchmarks; (v) Finally, we evaluate the efficiency of our annotation pipeline and its sensitivity to annotator error to demonstrate its practicality. Our code, models and annotation tool will be made publicly available.
 
 ### Installation
 ##### Prerequisites
 Our code is based on `Python 3.8` and uses the following Python packages.
 ```
-cv2, torch, torchvision, tqdm
+torch>=1.8.1
+torchvision>=0.9.1
+tqdm>=4.59.0
+cv2>=2.27
 ```
 
 
@@ -72,7 +75,7 @@ PixelPick|MobileNetv2|40 (0.031)|54.7 ± 0.4
 PixelPick|MobileNetv2|60 (0.046)|55.5 ± 0.6
 PixelPick|MobileNetv2|80 (0.061)|56.1 ± 0.3
 PixelPick|MobileNetv2|100 (0.076)|56.5 ± 0.3
-Fully-supervised|MobileNetv2|256x512 (100)| TBU
+Fully-supervised|MobileNetv2|256x512 (100)| 61.4 ± 0.5
 PixelPick|ResNet50|20 (0.015)|56.1 ± 0.4
 PixelPick|ResNet50|40 (0.031)|60.0 ± 0.3
 PixelPick|ResNet50|60 (0.046)|61.6 ± 0.4
@@ -97,8 +100,12 @@ PixelPick|ResNet50|50 (0.043)|67.4 ± 0.5
 Fully-supervised|ResNet50|N/A (100)|69.4 ± 0.3
 
 ### Models
-Trained models will be uploaded soon.
-[Link]("https://drive.google.com/file/d/1vtuSwLjFNjcfy4B2oiqkRWu0o-mbdqc4/view?usp=sharing" "link")
+model|dataset|backbone (encoder)|# labelled pixels per img (% annotation)|mean IoU (%)|Download
+:---|:---|:---:|:---:|:---:|:---:
+PixelPick|VOC 2012|MobileNetv2|50 (0.043)|57.4|[Link]("https://drive.google.com/file/d/1kV0Me2IdDzEUAT1nZkNAJqCZK_wI9DdA/view?usp=sharing" "link")
+PixelPick|ResNet50|50 (0.043)|50 (0.043)|68.0
+Fully-supervised|ResNet50|N/A (100)|69.4 ± 0.3
+
 
 ### PixelPick mouse-free annotation tool
 <p align="center">
