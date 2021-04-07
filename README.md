@@ -26,7 +26,7 @@ Our code is based on `Python 3.8` and uses the following Python packages.
 torch>=1.8.1
 torchvision>=0.9.1
 tqdm>=4.59.0
-cv2>=2.27
+cv2>=4.5.1.48
 ```
 
 
@@ -37,9 +37,15 @@ cd PixelPick
 ```
 
 ##### Download dataset
-Follow one of the links below and download a dataset you want to train/validate on. Then, set the `dir_dataset` variable in `args.py` to the directory path which contains the downloaded dataset.
+Follow one of the instructions below to download a dataset you are interest in. Then, __set the `dir_dataset` variable in `args.py` to the directory path which contains the downloaded dataset__.
 
-[CamVid](https://www.kaggle.com/carlolepelaars/camvid "camvid") | [Cityscapes](https://www.cityscapes-dataset.com "cityscapes") | [PASCAL VOC 2012 segmentation](http://host.robots.ox.ac.uk/pascal/VOC/voc2012/#devkit)
+* For __CamVid__, you need to download SegNet-Tutorial codebase as a zip file and use `CamVid` directory which contains images/annotations for training and test after unzipping it. You don't need to change the directory structure. [[CamVid]](https://github.com/alexgkendall/SegNet-Tutorial "camvid")
+
+* For __Cityscapes__, first visit the link and login to download. Once downloaded, you need to unzip it. You don't need to change the directory structure. It is worth noting that, if you set `downsample` variable in `args.py` (4 by default), it will first downsample train and val images of Cityscapes and store them within `{dir_dataset}_d{downsample}` folder which will be located in the same directory of `dir_dataset`. This is to enable a faster dataloading during training. [[Cityscapes]](https://www.cityscapes-dataset.com "cityscapes")
+
+* For __PASCAL VOC 2012__, the dataset will be automatically downloaded via `torchvision.datasets.VOCSegmentation`. You just need to specify which directory you want to download it with `dir_dataset` variable. If the automatic download fails, you can manually download through the following page (you don't need to untar `VOCtrainval_11-May-2012.tar` file which will be downloaded). [[PASCAL VOC 2012 segmentation]](http://host.robots.ox.ac.uk/pascal/VOC/voc2012/#devkit)
+
+__For more details about the data we used to train/validate our model, please visit `datasets` directory and find `{camvid, cityscapes, voc}_{train, val}.txt` file.__
 
 ##### Train and validate
 By default, the current code validates the model every epoch while training. To train a MobileNetv2-based DeepLabv3+ network, follow the below lines. (The pretrained MobileNetv2 will be loaded automatically.)
