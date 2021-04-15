@@ -6,6 +6,8 @@ This is an official implementation of the paper "All you need are a few pixels: 
 </p>
 
 [[Project page]](https://noelshin.github.io/PixelPick/ "project_page")
+[[Paper]](https://arxiv.org/abs/2104.06394 "Paper")
+
 
 ### Table of contents
 * [Abstract](#abstract)
