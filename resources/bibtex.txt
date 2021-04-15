@@ -1,6 +1,8 @@
-@inproceedings{author20XXtitle,
-  title={Please cite me},
-  author={Author, First and Author, Second and Author, Third},
-  booktitle={Conference},
-  year={20XX}
+@misc{shin2021need,
+      title={All you need are a few pixels: semantic segmentation with PixelPick}, 
+      author={Gyungin Shin and Weidi Xie and Samuel Albanie},
+      year={2021},
+      eprint={2104.06394},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
 }
