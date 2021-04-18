@@ -5,7 +5,7 @@ This is an official implementation of the paper "All you need are a few pixels: 
   <img src="resources/demo_voc_cs.png"></img>
 </p>
 
-[[Project page]](https://noelshin.github.io/PixelPick/ "project_page")
+[[Project page]](https://www.robots.ox.ac.uk/~vgg/research/pixelpick/ "project_page")
 [[Paper]](https://arxiv.org/abs/2104.06394 "Paper")
 
 
