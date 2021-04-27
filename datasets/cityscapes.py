@@ -20,7 +20,12 @@ class CityscapesDataset(Dataset):
             dir_dataset = f"{args.dir_dataset}_d{args.downsample}"
         else:
             dir_dataset = f"{args.dir_dataset}_d2"
-        assert os.path.isdir(dir_dataset), f"{dir_dataset} does not exist."
+
+        if not os.path.isdir(dir_dataset):
+            print("Downsampling Cityscapes images...")
+            _make_downsampled_cityscapes(f"{args.dir_dataset}", downsample=args.downsample, val=False)
+            _make_downsampled_cityscapes(f"{args.dir_dataset}", downsample=args.downsample, val=True)
+
         self.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
         self.seed = args.seed
 
@@ -229,22 +234,26 @@ def _make_downsampled_cityscapes(dir_cityscapes, downsample=4, val=False):
         x = Image.open(x).resize((w_downsample, h_downsample), resample=Image.BILINEAR)
         y = Image.open(y).resize((w_downsample, h_downsample), resample=Image.NEAREST)
 
-        x.save(f"{dst_x}/{name_x}")
-        y.save(f"{dst_y}/{name_y}")
-    return
-
-
-def _reduce_cityscapes_labels(dir_cityscapes, val=False):
-    mode = "val" if val else "train"
-
-    list_labels = sorted(glob(f"{dir_cityscapes}/gtFine/{mode}/**/*_labelIds.png"))
-
-    for y in tqdm(list_labels):
-        path_y = y
-        y = np.array(Image.open(y))
+        # reduce_cityscapes_labels
+        y = np.array(y)
         y = _cityscapes_classes_to_labels(y)
-        Image.fromarray(y).save(f"{path_y}")
+
+        x.save(f"{dst_x}/{name_x}")
+        Image.fromarray(y).save(f"{dst_y}/{name_y}")
     return
+
+
+# def _reduce_cityscapes_labels(dir_cityscapes, val=False):
+#     mode = "val" if val else "train"
+#
+#     list_labels = sorted(glob(f"{dir_cityscapes}/gtFine/{mode}/**/*_labelIds.png"))
+#
+#     for y in tqdm(list_labels):
+#         path_y = y
+#         y = np.array(Image.open(y))
+#         y = _cityscapes_classes_to_labels(y)
+#         Image.fromarray(y).save(f"{path_y}")
+#     return
 
 
 def _cityscapes_classes_to_labels(label_arr):

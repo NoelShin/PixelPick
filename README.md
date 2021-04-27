@@ -133,14 +133,14 @@ To implement the script, only two things are required to do:
 ```Python
 dataset_to_paths = {
     "camvid": {
-        "dir_imgs": "{PATH_TO_DATASET_DIR}/train",  # Directory containing the images
+        "dir_imgs": "{PATH_TO_CAMVID_DIR}/train",  # Directory containing the images
         "dir_gts": "{PATH_TO_CAMVID_DIR}/trainannot",  # Directory containing the groundtruth labels
         "path_query": "../query.npy"  # Path to the query file
     }
 }
 ```
 
-Then, you need to replace `{PATH_TO_DATASET_DIR}` with your directory which contains `CamVid` dataset. An example `query.npy` file can be found in the `annotation_tool` directory (you don't need to move this file).
+Then, you need to replace `{PATH_TO_CAMVID_DIR}` with your directory which contains `CamVid` dataset. An example `query.npy` file can be found in the `annotation_tool` directory (you don't need to move this file).
 
 (2) Then move to `annotation_tool/scripts` and launch the GUI by
 ```shell

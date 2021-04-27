@@ -26,7 +26,7 @@ class VOC2012Segmentation:
         if args.use_augmented_dataset and not val:
             self.voc = AugmentedVOC(args.dir_augmented_dataset)
         else:
-            self.voc = VOCSegmentation(f"{args.dir_dataset}", image_set='val' if val else 'train', download=False)
+            self.voc = VOCSegmentation(f"{args.dir_dataset}", image_set='val' if val else 'train', download=True)
         print("# images:", len(self.voc))
 
         self.geometric_augmentations = args.augmentations["geometric"]

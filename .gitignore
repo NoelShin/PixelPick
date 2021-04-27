@@ -1,6 +1,6 @@
 *.pyc
 *.png
-*.npy
+
 *.pt
 *.pth
 networks/backbones/pretrained/*
