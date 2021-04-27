@@ -124,7 +124,37 @@ PixelPick|VOC 2012|ResNet50|50 (0.043)|68.0|[Link](https://drive.google.com/file
   <img src="resources/pixelpick_annot_tool.gif" width="500"></img>
 </p>
 
-Code for the annotation tool will be made available.
+We are currently working on integrating PixelPick annotation tool into [VGG Image Annotator (VIA)](https://www.robots.ox.ac.uk/~vgg/software/via/ "VIA") which offers much better GUI (and degree of freedom in terms of file formats) than our current python-based version. However, for those who are interested in trying the current version, we leave a sample script for annotating the CamVid training images.
+
+To implement the script, only two things are required to do:
+
+(1) Go to `annotation_tool/launch_gui.py` file. You should be able to see
+
+```Python
+dataset_to_paths = {
+    "camvid": {
+        "dir_imgs": "{PATH_TO_DATASET_DIR}/train",  # Directory containing the images
+        "dir_gts": "{PATH_TO_CAMVID_DIR}/trainannot",  # Directory containing the groundtruth labels
+        "path_query": "../query.npy"  # Path to the query file
+    }
+}
+```
+
+Then, you need to replace `{PATH_TO_DATASET_DIR}` with your directory which contains `CamVid` dataset. An example `query.npy` file can be found in the `annotation_tool` directory (you don't need to move this file).
+
+(2) Then move to `annotation_tool/scripts` and launch the GUI by
+```shell
+cd annotation_tool/scripts
+sh cv-train.sh
+```
+
+Then, the annotation tool will be launched.
+
+It is worth noting that
+1. By default, the number of images that will be annotated is set to 10. However, you can change this value by setting a different value (-1 for all images).
+
+2. Your annotation will be stored in `annotation_tool/logs/camvid_*` directory as `txt` files.
+
 ### Citation
 To be updated.
 
