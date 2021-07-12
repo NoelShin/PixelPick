@@ -26,7 +26,7 @@ class VOC2012Segmentation:
         if args.use_augmented_dataset and not val:
             self.voc = AugmentedVOC(args.dir_augmented_dataset)
         else:
-            self.voc = VOCSegmentation(f"{args.dir_dataset}", image_set='val' if val else 'train', download=True)
+            self.voc = VOCSegmentation(f"{args.dir_dataset}", image_set='val' if val else 'train', download=False)
         print("# images:", len(self.voc))
 
         self.geometric_augmentations = args.augmentations["geometric"]
@@ -47,52 +47,59 @@ class VOC2012Segmentation:
         self.queries, self.n_pixels_total = None, -1
         path_queries = f"{args.dir_dataset}/init_labelled_pixels_{args.seed}.pkl"
         if n_pixels_per_img != 0 and not val:
-            os.makedirs(f"{self.dir_checkpoints}/0_query", exist_ok=True)
             n_pixels_total = 0
 
-            list_queries = list()
-            for i in tqdm(range(len(self.voc))):
-                label = self.voc[i][1]
-                w, h = label.size
+            if os.path.isfile(path_queries):
+                self.queries = pkl.load(open(path_queries, "rb"))
+                for q in self.queries:
+                    n_pixels_total += q.sum()
 
-                if n_pixels_per_img == 0:
-                    n_pixels_per_img = h * w
-                elif n_pixels_per_img != 0 and init_n_pixels > 0:
-                    n_pixels_per_img = init_n_pixels
-                else:
-                    raise NotImplementedError
+            else:
+                os.makedirs(f"{self.dir_checkpoints}/0_query", exist_ok=True)
 
-                # generate queries whose size is set to base_size (longer side), i.e. 400 as default
-                h, w = self._compute_base_size(h, w)
+                list_queries = list()
+                for i in tqdm(range(len(self.voc))):
+                    label = self.voc[i][1]
+                    w, h = label.size
 
-                queries_flat = np.zeros((h * w), dtype=np.bool)
+                    if n_pixels_per_img == 0:
+                        n_pixels_per_img = h * w
+                    elif n_pixels_per_img != 0 and init_n_pixels > 0:
+                        n_pixels_per_img = init_n_pixels
+                    else:
+                        raise NotImplementedError
 
-                # filter void pixels - boundary pixels that the original labels have (fyi, 5 pixels thickness)
-                label = label.resize((w, h), Image.NEAREST)  # note that downsampling method should be Image.NEAREST
-                label = np.asarray(label, dtype=np.int32)
+                    # generate queries whose size is set to base_size (longer side), i.e. 400 as default
+                    h, w = self._compute_base_size(h, w)
 
-                label_flatten = label.flatten()
-                ind_void_pixels = np.where(label_flatten == 255)[0]
+                    queries_flat = np.zeros((h * w), dtype=np.bool)
 
-                ind_non_void_pixels = np.setdiff1d(range(len(queries_flat)), ind_void_pixels)  # remove void pixels
-                assert len(ind_non_void_pixels) <= len(queries_flat)
+                    # filter void pixels - boundary pixels that the original labels have (fyi, 5 pixels thickness)
+                    label = label.resize((w, h), Image.NEAREST)  # note that downsampling method should be Image.NEAREST
+                    label = np.asarray(label, dtype=np.int32)
 
-                # for a very rare case where the number of non_void_pixels is not large enough to sample from
-                if len(ind_non_void_pixels) < n_pixels_per_img:
-                    n_pixels_per_img = len(ind_non_void_pixels)
+                    label_flatten = label.flatten()
+                    ind_void_pixels = np.where(label_flatten == 255)[0]
 
-                ind_chosen_pixels = np.random.choice(ind_non_void_pixels, n_pixels_per_img, replace=False)
+                    ind_non_void_pixels = np.setdiff1d(range(len(queries_flat)), ind_void_pixels)  # remove void pixels
+                    assert len(ind_non_void_pixels) <= len(queries_flat)
 
-                queries_flat[ind_chosen_pixels] += True
-                queries = queries_flat.reshape((h, w))
+                    # for a very rare case where the number of non_void_pixels is not large enough to sample from
+                    if len(ind_non_void_pixels) < n_pixels_per_img:
+                        n_pixels_per_img = len(ind_non_void_pixels)
 
-                list_queries.append(queries)
-                n_pixels_total += queries.sum()
-            pkl.dump(list_queries, open(f"{path_queries}", 'wb'))
+                    ind_chosen_pixels = np.random.choice(ind_non_void_pixels, n_pixels_per_img, replace=False)
 
-            # Note that images of voc dataset vary from image to image thus can't use np.stack().
-            self.queries = list_queries
-            pkl.dump(self.queries, open(f"{self.dir_checkpoints}/0_query/label.pkl", 'wb'))
+                    queries_flat[ind_chosen_pixels] += True
+                    queries = queries_flat.reshape((h, w))
+
+                    list_queries.append(queries)
+                    n_pixels_total += queries.sum()
+
+                pkl.dump(list_queries, open(f"{path_queries}", 'wb'))
+                # Note that images of voc dataset vary from image to image thus can't use np.stack().
+                self.queries = list_queries
+                pkl.dump(self.queries, open(f"{self.dir_checkpoints}/0_query/label.pkl", 'wb'))
 
             self.n_pixels_total = n_pixels_total
             print("# labelled pixels used for training:", n_pixels_total)

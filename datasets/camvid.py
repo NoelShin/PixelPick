@@ -38,31 +38,37 @@ class CamVidDataset(Dataset):
         n_pixels_per_img = args.n_pixels_by_us
 
         if n_pixels_per_img != 0 and not val:
-            list_masks = list()
-            np.random.seed(self.seed)
+            path_queries = f"{self.dir_checkpoints}/0_query/queries.npy"
+            if os.path.isfile(path_queries):
+                self.queries = np.load(path_queries)
+                self.n_pixels_total = self.queries.sum()
 
-            label = Image.open(self.list_labels[0])
-            w, h = label.size
+            else:
+                list_masks = list()
+                np.random.seed(self.seed)
 
-            # iterate over labels to get masks
-            for i in tqdm(range(len(self.list_labels))):
-                label = np.array(Image.open(self.list_labels[i]))  # H x W
+                label = Image.open(self.list_labels[0])
+                w, h = label.size
 
-                # exclude pixels with ignore_index
-                ind_non_void_pixels = np.where(label.flatten() != self.ignore_index)[0]
-                ind_chosen_pixels = np.random.choice(ind_non_void_pixels, n_pixels_per_img, replace=False)
+                # iterate over labels to get masks
+                for i in tqdm(range(len(self.list_labels))):
+                    label = np.array(Image.open(self.list_labels[i]))  # H x W
 
-                mask_flat = np.zeros((h, w), dtype=np.bool).flatten()
-                mask_flat[ind_chosen_pixels] = True
-                list_masks.append(mask_flat.reshape((h, w)))
+                    # exclude pixels with ignore_index
+                    ind_non_void_pixels = np.where(label.flatten() != self.ignore_index)[0]
+                    ind_chosen_pixels = np.random.choice(ind_non_void_pixels, n_pixels_per_img, replace=False)
 
-            self.queries = np.array(list_masks, dtype=np.bool)
-            self.n_pixels_total = self.queries.sum()
+                    mask_flat = np.zeros((h, w), dtype=np.bool).flatten()
+                    mask_flat[ind_chosen_pixels] = True
+                    list_masks.append(mask_flat.reshape((h, w)))
 
-            # save initial labelled pixels for a future reproduction
-            os.makedirs(f"{self.dir_checkpoints}/0_query", exist_ok=True)
-            np.save(f"{self.dir_checkpoints}/0_query/queries.npy", self.queries)
-            print("# labelled pixels used for training:", self.n_pixels_total)
+                self.queries = np.array(list_masks, dtype=np.bool)
+                self.n_pixels_total = self.queries.sum()
+
+                # save initial labelled pixels for a future reproduction
+                os.makedirs(f"{self.dir_checkpoints}/0_query", exist_ok=True)
+                np.save(path_queries, self.queries)
+                print("# labelled pixels used for training:", self.n_pixels_total)
 
         self.val = val
         self.query = query
