@@ -1,0 +1,57 @@
+dir_root: "/Users/noel/projects/PixelPick"  # project directory path
+
+# dataset
+dataset_name: "camvid"   # change the name depending on your dataset
+dir_dataset: "/Users/noel/projects/PixelPick/via/datasets/camvid"  # set this to the absolute path to the directory containing images to be queried
+ignore_index: 255 # set this for a label value that you would like to ignore
+img_ext: "png"  # set this to the extension of images in the dir_dataset directory
+n_classes: 11   # set this to the number of classes you are considering
+
+# vgg image annotator (VIA) configuration
+# mapping defines the key setting that you will use during annotation
+mapping: {
+  K: "sKy",
+  B: "Building",
+  P: "Pole",
+  R: "Road",
+  V: "paVement",
+  T: "Tree",
+  S: "Sign symbol",
+  F: "Fence",
+  C: "Car",
+  D: "peDestrian",
+  I: "bIcyclist",
+}
+
+# k_to_category_id decides how to map the key character to a label value
+k_to_category_id: {
+  K: 0,
+  B: 1,
+  P: 2,
+  R: 3,
+  V: 4,
+  T: 5,
+  S: 6,
+  F: 7,
+  C: 8,
+  D: 9,
+  I: 10
+}
+
+mean: [0.41189489566336, 0.4251328133025, 0.4326707089857]  # change this if you want to normalise images with a different mean
+std: [0.27413549931506, 0.28506257482912, 0.28284674400252]  # change this if you want to normalise images with a different standard deviation
+
+# augmentation (training time only)
+crop_size: [360, 480]  # [H, W]
+
+# optimization
+batch_size: 4  # a batch size used for training
+n_epochs: 50
+optimizer_type: "Adam"
+optimizer_params: {
+  lr: 0.0005,
+  betas: [0.9, 0.999],
+  weight_decay: 0.0002,
+  eps: 0.0000007
+}
+lr_scheduler_type: "MultiStepLR"  # you can choose between ["Poly", "MultiStepLR"]

@@ -1,6 +1,10 @@
 import os
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
+import yaml
 from pprint import pformat
+import random
+import numpy as np
+import torch
 
 
 class Arguments:
@@ -9,6 +13,7 @@ class Arguments:
 
         parser.add_argument("--debug", "-d", action="store_true", default=False)
         parser.add_argument("--dir_root", type=str, default="..")
+        parser.add_argument("--dir_checkpoints", type=str, default='')
         parser.add_argument("--gpu_ids", type=str, nargs='+', default='0')
         parser.add_argument("--n_workers", type=int, default=4)
         parser.add_argument("--network_name", type=str, default="deeplab", choices=["deeplab", "FPN"])
@@ -51,7 +56,10 @@ class Arguments:
 
         self.parser = parser
 
-    def parse_args(self):
+    def parse_args(
+            self,
+            verbose: bool = False
+    ):
         args = self.parser.parse_args()
         args.augmentations = {
             "geometric": {
@@ -67,69 +75,81 @@ class Arguments:
             }
         }
         args.stride_total = 8 if args.use_dilated_resnet else 32
-        if args.dataset_name == "cs":
-            args.batch_size = 4
-            args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/cityscapes"
-            args.ignore_index = 19
-            args.mean, args.std = [0.28689554, 0.32513303, 0.28389177], [0.18696375, 0.19017339, 0.18720214]
-            args.n_classes = 19
-            args.n_epochs = 50
 
-            args.optimizer_type = "Adam"
-            args.lr_scheduler_type = "Poly"
-            assert args.lr_scheduler_type in ["Poly", "MultiStepLR"]
+        if args.p_dataset_config is not None:
+            assert os.path.exists(args.p_dataset_config), FileNotFoundError(args.p_dataset_config)
+            # args: Namespace = parser.parse_args()
+            dataset_config = yaml.safe_load(open(f"{args.p_dataset_config}", 'r'))
+            args: dict = vars(args)
+            args.update(dataset_config)
+            args: Namespace = Namespace(**args)
 
-            # This params are for Adam
-            args.optimizer_params = {
-                "lr": 5e-4,
-                "betas": (0.9, 0.999),
-                "weight_decay": 2e-4,
-                "eps": 1e-7
-            }
+        else:
+            if args.dataset_name == "cs":
+                args.batch_size = 4
+                args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/cityscapes"
+                args.ignore_index = 19
+                args.mean, args.std = [0.28689554, 0.32513303, 0.28389177], [0.18696375, 0.19017339, 0.18720214]
+                args.n_classes = 19
+                args.n_epochs = 50
 
-        elif args.dataset_name == "cv":
-            args.batch_size = 4
-            args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/camvid"
-            args.downsample = 1
-            args.ignore_index = 11
-            args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
-            args.std = [0.27413549931506, 0.28506257482912, 0.28284674400252]
-            args.n_classes = 11
-            args.n_epochs = 50
+                args.optimizer_type = "Adam"
+                args.lr_scheduler_type = "Poly"
+                assert args.lr_scheduler_type in ["Poly", "MultiStepLR"]
 
-            args.optimizer_type = "Adam"
-            args.lr_scheduler_type = "MultiStepLR"
-            assert args.lr_scheduler_type in ["Poly", "MultiStepLR"]
+                # This params are for Adam
+                args.optimizer_params = {
+                    "lr": 5e-4,
+                    "betas": (0.9, 0.999),
+                    "weight_decay": 2e-4,
+                    "eps": 1e-7
+                }
 
-            # This params are for Adam
-            args.optimizer_params = {
-                "lr": 5e-4,
-                "betas": (0.9, 0.999),
-                "weight_decay": 2e-4,
-                "eps": 1e-7
-            }
+            elif args.dataset_name == "cv":
+                args.batch_size = 4
+                args.dir_dataset = "/Users/noel/Desktop/pixelpick/pixelpick_via_launch/camvid"
+                args.downsample = 1
+                args.ignore_index = 11
+                args.mean = [0.41189489566336, 0.4251328133025, 0.4326707089857]
+                args.std = [0.27413549931506, 0.28506257482912, 0.28284674400252]
+                args.n_classes = 11
+                args.n_epochs = 50
 
-        elif args.dataset_name == "voc":
-            args.batch_size = 10
-            args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/VOC2012"
-            args.dir_augmented_dataset = "/scratch/shared/beegfs/gyungin/datasets/VOC2012/VOCdevkit/VOC2012/train_aug"
-            args.ignore_index = 255
-            args.mean, args.std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-            args.n_classes = 21
+                args.optimizer_type = "Adam"
+                args.lr_scheduler_type = "MultiStepLR"
+                assert args.lr_scheduler_type in ["Poly", "MultiStepLR"]
 
-            args.n_epochs = 50
+                # This params are for Adam
+                args.optimizer_params = {
+                    "lr": 5e-4,
+                    "betas": (0.9, 0.999),
+                    "weight_decay": 2e-4,
+                    "eps": 1e-7
+                }
 
-            args.size_base = 400
-            args.size_crop = 320
+            elif args.dataset_name == "voc":
+                args.batch_size = 10
+                args.dir_dataset = "/scratch/shared/beegfs/gyungin/datasets/VOC2012"
+                args.dir_augmented_dataset = "/scratch/shared/beegfs/gyungin/datasets/VOC2012/VOCdevkit/VOC2012/train_aug"
+                args.ignore_index = 255
+                args.mean, args.std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+                args.n_classes = 21
 
-            args.optimizer_type = "SGD"
-            args.lr_scheduler_type = "Poly"
+                args.n_epochs = 50
 
-            args.optimizer_params = {
-                "lr": 1e-2,
-                "weight_decay": 1e-4,
-                "momentum": 0.9
-            }
+                args.size_base = 400
+                args.size_crop = 320
+
+                args.optimizer_type = "SGD"
+                args.lr_scheduler_type = "Poly"
+
+                args.optimizer_params = {
+                    "lr": 1e-2,
+                    "weight_decay": 1e-4,
+                    "momentum": 0.9
+                }
+            else:
+                raise ValueError(f"Unsupported dataset name: {args.dataset_name}")
 
         # naming
         list_keywords = list()
@@ -141,11 +161,14 @@ class Arguments:
         list_keywords.append(f"{args.weight_type}") if args.network_name == "FPN" else None
 
         # query strategy
-        list_keywords.append(f"{args.query_strategy}") if args.n_pixels_by_us > 0 else None
-        list_keywords.append(f"{args.vote_type}") if args.use_mc_dropout else None
-        list_keywords.append(f"{args.n_pixels_by_us}")
-        list_keywords.append(f"p{args.top_n_percent}") if args.top_n_percent > 0. and args.n_pixels_by_us > 0 else None
-        list_keywords.append("reverse") if args.reverse_order else None
+        if args.n_pixels_by_us > 0:
+            list_keywords.append(f"{args.query_strategy}")
+            list_keywords.append(f"{args.vote_type}") if args.use_mc_dropout else None
+            list_keywords.append(f"{args.n_pixels_by_us}")
+            list_keywords.append(f"p{args.top_n_percent}") if args.top_n_percent > 0. else None
+            list_keywords.append("reverse") if args.reverse_order else None
+        else:
+            list_keywords.append("fully_sup")
 
         list_keywords.append(str(args.seed))
         list_keywords.append(args.suffix) if args.suffix != '' else None
@@ -157,7 +180,8 @@ class Arguments:
             raise TypeError(list_keywords)
 
         # create dirs
-        args.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
+        if args.dir_checkpoints == '':
+            args.dir_checkpoints = f"{args.dir_root}/checkpoints/{args.experim_name}"
         os.makedirs(args.dir_checkpoints, exist_ok=True)
 
         with open(f"{args.dir_checkpoints}/args.txt", 'w') as f:
@@ -165,4 +189,17 @@ class Arguments:
             f.close()
 
         print(f"\nmodel name: {args.experim_name}\n")
+
+        os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(args.gpu_ids[0])
+
+        # set seed
+        [func(args.seed) for func in [random.seed, np.random.seed, torch.manual_seed]]
+        torch.backends.cudnn.benchmark = True
+
+        if verbose:
+            print("Options...")
+            for k, v in sorted(vars(args).items()):
+                print(k, v)
+            print('=' * 200)
+
         return args

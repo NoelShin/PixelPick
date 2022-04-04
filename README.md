@@ -15,7 +15,7 @@ This is an official implementation of the paper "All you need are a few pixels: 
 * [Benchmark results](#benchmark-results)
 * [Models](#models)
 * [PixelPick mouse-free annotation tool](#pixelpick-mouse-free-annotation-tool) (to be updated)
-* [Citation](#citation) (to be updated)
+* [Citation](#citation)
 * [Acknowledgements](#acknowledgements)
 
 ### Abstract
@@ -156,7 +156,16 @@ It is worth noting that
 2. Your annotation will be stored in `annotation_tool/logs/camvid_*` directory as `txt` files.
 
 ### Citation
-To be updated.
+```shell
+@InProceedings{Shin_2021_ICCV,
+    author    = {Shin, Gyungin and Xie, Weidi and Albanie, Samuel},
+    title     = {All You Need Are a Few Pixels: Semantic Segmentation With PixelPick},
+    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) Workshops},
+    month     = {October},
+    year      = {2021},
+    pages     = {1687-1697}
+}
+```
 
 ### Acknowledgements
 We borrowed code for the MobileNetv2-based DeepLabv3+ network from https://github.com/Shuai-Xie/DEAL.
