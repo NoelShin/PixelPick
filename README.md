@@ -1,4 +1,4 @@
-# PixelPick
+# PixelPick [Best paper at [ICCV 2021 ILDAV workshop](https://ildav-workshop.github.io)]
 This is an official implementation of the paper "All you need are a few pixels: semantic segmentation with PixelPick."
 
 <p align="center">
