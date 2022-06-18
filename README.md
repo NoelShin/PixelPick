@@ -110,12 +110,12 @@ Fully-supervised|ResNet50|N/A (100)|69.4 ± 0.3
 ### Models
 model|dataset|backbone (encoder)|# labelled pixels per img (% annotation)|mean IoU (%)|Download
 :---|:---|:---:|:---:|:---:|:---:
-PixelPick|CamVid|MobileNetv2|100 (0.058)|56.1|[Link](https://drive.google.com/file/d/1HGd9dUz7Xf_OUOw26f8J-t6kWTdDZOic/view?usp=sharing "link")
+PixelPick|CamVid|MobileNetv2|100 (0.058)|56.1|[Link](https://www.robots.ox.ac.uk/~vgg/research/pixelpick/shared_files/cv_dl_margin_sampling_100ppi.zip "link")
 PixelPick|CamVid|ResNet50|100 (0.058)|TBU|TBU
-PixelPick|Cityscapes|MobileNetv2|100 (0.076)|56.8|[Link](https://drive.google.com/file/d/1tLcNSpw5xVMKy_xmXTmL9xwGPJ4-nXKx/view?usp=sharing "link")
-PixelPick|Cityscapes|ResNet50|100 (0.076)|63.3|[Link](https://drive.google.com/file/d/1OZGeIpNpFPbeFj9sO9Cq5zZbgVs_gbCc/view?usp=sharing "link")
-PixelPick|VOC 2012|MobileNetv2|50 (0.043)|57.4|[Link](https://drive.google.com/file/d/1afuqPYryd5kzfsUcf0xSFhGHjphMQ-Rv/view?usp=sharing "link")
-PixelPick|VOC 2012|ResNet50|50 (0.043)|68.0|[Link](https://drive.google.com/file/d/1fKWMz89-hwB_EApcacxfPApNHvvXf9MB/view?usp=sharing "link")
+PixelPick|Cityscapes|MobileNetv2|100 (0.076)|56.8|[Link](https://www.robots.ox.ac.uk/~vgg/research/pixelpick/shared_files/cs_dl_margin_sampling_100ppi.zip "link")
+PixelPick|Cityscapes|ResNet50|100 (0.076)|63.3|[Link](https://www.robots.ox.ac.uk/~vgg/research/pixelpick/shared_files/cs_fpn50_margin_sampling_100ppi.zip "link")
+PixelPick|VOC 2012|MobileNetv2|50 (0.043)|57.4|[Link](https://www.robots.ox.ac.uk/~vgg/research/pixelpick/shared_files/voc_dl_margin_sampling_50ppi.zip "link")
+PixelPick|VOC 2012|ResNet50|50 (0.043)|68.0|[Link](https://www.robots.ox.ac.uk/~vgg/research/pixelpick/shared_files/voc_fpn50_margin_sampling_50ppi.zip "link")
 
 
 
